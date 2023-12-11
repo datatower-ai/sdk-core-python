@@ -20,7 +20,7 @@ def find_version(*paths):
 
 setup(
     name='datatower-ai',
-    version=find_version('datatower_ai', 'sdk.py'),
+    version=find_version('datatower_ai', '__init__.py'),
     description='DataTower.ai SDK for Python',
     long_description=read('README.md'),
     long_description_content_type='text/markdown',

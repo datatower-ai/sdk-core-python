@@ -11,14 +11,11 @@ import threading
 import time
 import random
 import requests
+from datatower_ai.src.util.logger import Logger
 from requests import ConnectionError
 import logging
 
-logger = logging.getLogger(__name__)
-
 default_server_url = "https://s2s.roiquery.com/sync"
-__version__ = '3.0.0-dev1'
-is_print = False
 
 __NAME_PATTERN = re.compile(r"^[#$a-zA-Z][a-zA-Z0-9_]{0,63}$", re.I)
 _STR_LD = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -79,17 +76,6 @@ def assert_properties(event_name, properties):
 
             if '#user_add' == event_name.lower() and not isNumber(value):
                 raise DTIllegalDataException('User_add properties must be number type')
-
-
-def log(msg=None, level=logging.INFO):
-    if msg is not None and is_print:
-        prefix = '[DataTower.ai-Python SDK v%s]' % __version__
-        if level <= logging.INFO:
-            logger.info("{}-{}".format(prefix, msg))
-        elif level <= logging.WARNING:
-            logger.warning("{}-{}".format(prefix, msg))
-        else:
-            logger.error("{}-{}".format(prefix, msg))
 
 
 class DTException(Exception):
@@ -159,6 +145,7 @@ class DTAnalytics(object):
         self.__super_properties = {}
         self.__dynamic_super_properties_tracker = None
         self.__app_id = consumer.get_app_id()
+        from datatower_ai.__init__ import __version__
         self.__preset_properties = {
             '#app_id': self.__app_id,
             '#sdk_type': 'dt_python_sdk',
@@ -357,7 +344,7 @@ class DTAnalytics(object):
 
         try:
             content = json.dumps(data, separators=(',', ':'), cls=DTDateTimeSerializer, allow_nan=False)
-            log('collect data={}'.format(data))
+            Logger.log('collect data={}'.format(data))
             self.__consumer.add(content)
         except TypeError as e:
             raise DTIllegalDataException(e)
@@ -376,8 +363,7 @@ class DTAnalytics(object):
 
     @staticmethod
     def enable_log(isPrint=False):
-        global is_print
-        is_print = isPrint
+        Logger.is_print = isPrint
 
 
 if os.name == 'nt':
@@ -513,7 +499,7 @@ class BatchConsumer(AbstractConsumer):
             try:
                 self.flush_once(throw_exception)
             except DTIllegalDataException as e:
-                log(e, level=logging.WARNING)
+                Logger.log(e, level=logging.WARNING)
                 continue
 
     def flush_once(self, throw_exception=True):
@@ -623,7 +609,7 @@ class AsyncBatchConsumer(AbstractConsumer):
         self.flush()
         self.__flushing_thread.stop()
         while not self.__queue.empty():
-            log("当前未发送数据数: {}".format(self.__queue.qsize()))
+            Logger.log("当前未发送数据数: {}".format(self.__queue.qsize()))
             self._perform_request()
 
     def _need_drain(self):
@@ -648,12 +634,12 @@ class AsyncBatchConsumer(AbstractConsumer):
                     self.__http_service.send('[' + ','.join(flush_buffer) + ']', str(len(flush_buffer)))
                     return True
                 except DTNetworkException as e:
-                    log("{}: {}".format(e, flush_buffer), level=logging.WARNING)
+                    Logger.log("{}: {}".format(e, flush_buffer), level=logging.WARNING)
                     continue
                 except DTIllegalDataException as e:
-                    log("{}: {}".format(e, flush_buffer), level=logging.WARNING)
+                    Logger.log("{}: {}".format(e, flush_buffer), level=logging.WARNING)
                     break
-            log("{}: {}".format("Data translate failed 3 times", flush_buffer), level=logging.ERROR)
+            Logger.log("{}: {}".format("Data translate failed 3 times", flush_buffer), level=logging.ERROR)
 
 
     class _AsyncFlushThread(threading.Thread):
@@ -730,6 +716,7 @@ class _HttpServices(object):
             DTIllegalDataException: 数据错误
             DTNetworkException: 网络错误
         """
+        from datatower_ai.__init__ import __version__
         headers = {'app_id': self.app_id, 'DT-type': 'python-sdk', 'sdk-version': __version__,
                    'data-count': length, 'token': self.token}
         try:
@@ -743,14 +730,14 @@ class _HttpServices(object):
             response = requests.post(self.url, data=data, headers=headers, timeout=self.timeout)
             if response.status_code == 200:
                 response_data = json.loads(response.text)
-                log('response={}'.format(response_data))
+                Logger.log('response={}'.format(response_data))
                 if response_data["code"] == 0:
                     return True
                 else:
                     raise DTIllegalDataException("Unexpected result code: " + str(response_data["code"]) \
                                                  + " reason: " + response_data["msg"])
             else:
-                log('response={}'.format(response.status_code))
+                Logger.log('response={}'.format(response.status_code))
                 raise DTNetworkException("Unexpected Http status code " + str(response.status_code))
         except ConnectionError as e:
             time.sleep(0.5)
