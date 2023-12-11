@@ -1,2 +1,89 @@
-def verify_preset():
-    pass
+import datetime
+import re
+from typing import Dict, List
+
+from future.types.newint import long
+
+from datatower_ai import DTMetaDataException, DTIllegalDataException
+
+__compulsory_meta = ("#bundle_id",)
+__name_regex = re.compile(r"^[#$a-zA-Z][a-zA-Z0-9_]{0,63}$")
+
+__preset_props_common = ("$uid", "#dt_id", "#acid", "#event_syn", "#session_id", "#device_manufacturer", "#event_name", "#is_foreground", "#android_id", "#gaid", "#mcc", "#mnc", "#os_country_code", "#os_lang_code", "#event_time", "#bundle_id", "#app_version_code", "#app_version_name", "#sdk_type", "#sdk_version_name", "#os", "#os_version_name", "#os_version_code", "#device_brand", "#device_model", "#build_device", "#screen_height", "#screen_width", "#memory_used", "#storage_used", "#network_type", "#simulator", "#fps", "$ip", "$country_code", "$server_time")
+__preset_props_ad = ("#ad_seq", "#ad_id", "#ad_type_code", "#ad_platform_code", "#ad_entrance", "#ad_result", "#ad_duration", "#ad_location", "#errorCode", "#errorMessage", "#ad_value", "#ad_currency", "#ad_precision", "#ad_country_code", "#ad_mediation_code", "#ad_mediation_id")
+__preset_event = {
+    "#app_install": ("#referrer_url", "#referrer_click_time", "#app_install_time", "#instant_experience_launched", "#failed_reason", "#cnl"),
+    "#session_start": ("#is_first_time", "#resume_from_background", "#start_reason"),
+    "$app_install": ("$network_id", "$network_name", "$tracker_id", "$tracker_name", "$channel_id", "$channel_sub_id", "$channel_ssub_id", "$channel_name", "$channel_sub_name", "$channel_ssub_name", "$channel_platform_id", "$channel_platform_name", "$attribution_source", "$fraud_network_id", "$original_tracker_id", "$original_tracker_name", "$original_network_id", "$original_network_name"),
+    "#session_end": ("#session_duration",),
+    "#ad_show": __preset_props_ad,
+    "#ad_conversion": __preset_props_ad,
+    "#iap_purchase_success": ("#iap_order", "#iap_sku", "#iap_price", "#iap_currency", "$iap_price_exchange"),
+    "#ias_subscribe_success": ("#ias_original_order", "#ias_order", "#ias_sku", "#ias_price", "#ias_currency", "$ias_price_exchange")
+}
+
+
+def extra_verify(send_type, event_name=None, properties_add=None):
+    for prop in __compulsory_meta:
+        if prop not in properties_add:
+            raise DTMetaDataException("Required meta property \"{}\" is missing!".format(prop))
+
+    if send_type == "track" and (event_name.startswith("#") or event_name.startswith("$")):
+        if event_name not in __preset_event:
+            raise DTMetaDataException("event_name (\"{}\") is out of scope!".format(event_name))
+        __verify_preset_properties(event_name, properties_add)
+    else:
+        __verify_properties(event_name, properties_add)
+
+
+def __verify_preset_properties(event_name: str, properties):
+    if not isinstance(properties, Dict):
+        raise DTIllegalDataException("Type of \"properties\" of preset event should be Dict!")
+    for (key, value) in properties.items():
+        if key not in __preset_event[event_name] and key not in __preset_props_common:
+            raise DTIllegalDataException(
+                "key of property (\"{}\") is not valid and out of scope for preset event (\"{}\")!".format(key, event_name)
+            )
+
+
+def __verify_properties(event_name: str, properties):
+    if event_name == "#user_append" or event_name == "#user_uniq_append":
+        __verify_properties_4_list(properties, event_name)
+    elif event_name == "#user_add":
+        __verify_properties_4_number_list(properties, event_name)
+    else:
+        for key, value in properties.items():
+            __verify_properties_key(key)
+            __verify_properties_value(
+                value,
+                "Type of value ({}, {}) is not supported for key ({})".format(type(value), value, key)
+            )
+
+
+def __verify_properties_4_list(properties, event_name):
+    if not isinstance(properties, List):
+        raise DTIllegalDataException("Type of properties for {} should be List".format(event_name))
+    for value in properties:
+        __verify_properties_value(
+            value,
+            "Type of value ({}, {}) is not supported!".format(type(value), value)
+        )
+
+
+def __verify_properties_4_number_list(properties, event_name):
+    if not isinstance(properties, List):
+        raise DTIllegalDataException("Type of properties for {} should be List".format(event_name))
+    for value in properties:
+        if not isinstance(value, (int, float, long)):
+            raise DTIllegalDataException(
+                "Type of value ({}, {}) is not supported, should be a valid number!".format(type(value), value))
+
+
+def __verify_properties_value(value, msg):
+    if not isinstance(value, (int, float, long, str, List, Dict, bool, datetime.datetime, datetime.date)):
+        raise DTIllegalDataException(msg)
+
+
+def __verify_properties_key(key):
+    if not __name_regex.fullmatch(key):
+        raise DTIllegalDataException("")

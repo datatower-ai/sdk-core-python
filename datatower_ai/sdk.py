@@ -281,25 +281,6 @@ class DTAnalytics(object):
         all_properties = self._public_track_add(event_name, properties)
         self.__add(dt_id=dt_id, acid=acid, send_type='track', event_name=event_name, properties_add=all_properties)
 
-    def track_first(self, dt_id=None, acid=None, event_name='#app_install', properties=None):
-        """
-        发送安装事件数据
-
-        您可以调用 track_first 来上传首次事件，建议您根据先前梳理的文档来设置事件的属性以及发送信息的条件. 事件的属性是一个 dict 对象，其中每个元素代表一个属性.
-        首次事件是指针对某个设备或者其他维度的 ID，只会记录一次的事件. 例如在一些场景下，您可能希望记录在某个设备上第一次发生的事件，则可以用首次事件来上报数据.
-        Args:
-            dt_id: 访客 ID
-            acid: 账户 ID
-            event_name: 事件名称
-            properties: 事件属性
-
-        Raises:
-            DTIllegalDataException: 数据格式错误时会抛出此异常
-        """
-        all_properties = self._public_track_add(event_name, properties)
-        self.__add(dt_id=dt_id, acid=acid, send_type='track', event_name=event_name,
-                   properties_add=all_properties)
-
     def flush(self):
         """
         立即提交数据到相应的接收端
@@ -340,7 +321,10 @@ class DTAnalytics(object):
         else:
             properties = {}
 
-        self.__movePresetProperties(['#app_id', '#debug', '#event_time', '#event_syn'], data, properties)
+        from datatower_ai.src.extra_verify import extra_verify
+        extra_verify(send_type, event_name, properties_add)
+
+        self.__movePresetProperties(["#app_id", "#bundle_id", "#android_id", "#gaid", "#dt_id", "#acid", "#event_time", "#event_syn"], data, properties)
 
         if '#event_time' not in data:
             self.__buildData(data, '#event_time', int(time.time() * 1000))
@@ -380,24 +364,6 @@ class DTAnalytics(object):
             if key in properties.keys():
                 data[key] = properties.get(key)
                 del (properties[key])
-
-    def clear_super_properties(self):
-        """
-        删除所有已设置的事件公共属性
-        """
-        self.__super_properties = self.__preset_properties.copy()
-
-    def set_super_properties(self, super_properties):
-        """
-        设置公共事件属性
-
-        公共事件属性是所有事件中的属性属性，建议您在发送事件前，先设置公共事件属性. 当 track 的 properties 和
-        super properties 有相同的 key 时，track 的 properties 会覆盖公共事件属性的值.
-
-        Args:
-            super_properties 公共属性
-        """
-        self.__super_properties.update(super_properties)
 
     @staticmethod
     def enable_log(isPrint=False):
