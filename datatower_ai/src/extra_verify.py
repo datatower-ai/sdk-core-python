@@ -1,11 +1,12 @@
 import datetime
 import re
-from typing import Dict, List
+from typing import Dict, List, Any
 
 from future.types.newint import long
 
 from datatower_ai import DTMetaDataException, DTIllegalDataException
 
+meta = ["#app_id", "#bundle_id", "#android_id", "#gaid", "#dt_id", "#acid", "#event_time", "#event_syn"]
 __compulsory_meta = ("#bundle_id",)
 __name_regex = re.compile(r"^[#$a-zA-Z][a-zA-Z0-9_]{0,63}$")
 
@@ -23,17 +24,34 @@ __preset_event = {
 }
 
 
-def extra_verify(send_type, event_name=None, properties_add=None):
+def extra_verify(dictionary: Dict[str, Any]):
+    print(dictionary)
     for prop in __compulsory_meta:
-        if prop not in properties_add:
+        if prop not in dictionary:
             raise DTMetaDataException("Required meta property \"{}\" is missing!".format(prop))
 
-    if send_type == "track" and (event_name.startswith("#") or event_name.startswith("$")):
+    if len(dictionary.get("#app_id", "")) == 0:
+        raise DTMetaDataException("app_id cannot missing or be empty!")
+
+    dt_id = dictionary["#dt_id"]
+    ac_id = dictionary["#acid"]
+    if dt_id is None and ac_id is None:
+        raise DTMetaDataException("At least one of dt_id or ac_id should be provided!")
+    if dt_id is not None and not isinstance(dt_id, str):
+        raise DTMetaDataException("dt_id should be str!")
+    if ac_id is not None and not isinstance(ac_id, str):
+        raise DTMetaDataException("acid should be str!")
+
+    event_name: str = dictionary["#event_name"]
+    if not __name_regex.match(event_name):
+        raise DTMetaDataException("event_name must be a valid variable name.")
+
+    if dictionary["#event_type"] == "track" and (event_name.startswith("#") or event_name.startswith("$")):
         if event_name not in __preset_event:
             raise DTMetaDataException("event_name (\"{}\") is out of scope!".format(event_name))
-        __verify_preset_properties(event_name, properties_add)
+        __verify_preset_properties(event_name, dictionary["properties"])
     else:
-        __verify_properties(event_name, properties_add)
+        __verify_properties(event_name, dictionary["properties"])
 
 
 def __verify_preset_properties(event_name: str, properties):

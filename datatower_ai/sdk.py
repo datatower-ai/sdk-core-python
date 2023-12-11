@@ -17,7 +17,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 default_server_url = "https://s2s.roiquery.com/sync"
-__version__ = '2.0.0'
+__version__ = '3.0.0-dev1'
 is_print = False
 
 __NAME_PATTERN = re.compile(r"^[#$a-zA-Z][a-zA-Z0-9_]{0,63}$", re.I)
@@ -83,7 +83,7 @@ def assert_properties(event_name, properties):
 
 def log(msg=None, level=logging.INFO):
     if msg is not None and is_print:
-        prefix = '[DataTower.ai-Python SDK V%s]' % __version__
+        prefix = '[DataTower.ai-Python SDK v%s]' % __version__
         if level <= logging.INFO:
             logger.info("{}-{}".format(prefix, msg))
         elif level <= logging.WARNING:
@@ -165,12 +165,11 @@ class DTAnalytics(object):
             '#sdk_version_name': __version__,
         }
         self.debug = debug
-        self.clear_super_properties()
 
     def set_dynamic_super_properties_tracker(self, dynamic_super_properties_tracker):
         self.__dynamic_super_properties_tracker = dynamic_super_properties_tracker
 
-    def user_set(self, dt_id=None, acid=None, properties=None):
+    def user_set(self, dt_id=None, acid=None, properties=None, meta=None):
         """
         设置用户属性
 
@@ -181,11 +180,12 @@ class DTAnalytics(object):
             dt_id: 访客 ID
             acid: 账户 ID
             properties: dict 类型的用户属性
+            meta: Dict[str, Any], properties 之外以带 #、$ 开头的属性
         """
         self.__add(dt_id=dt_id, acid=acid, event_name='#user_set', send_type='user',
-                   properties_add=properties)
+                   properties_add=properties, meta=meta)
 
-    def user_unset(self, dt_id=None, acid=None, properties=None):
+    def user_unset(self, dt_id=None, acid=None, properties=None, meta=None):
         """
         删除某个用户的用户属性
 
@@ -193,13 +193,14 @@ class DTAnalytics(object):
             dt_id: 访客 ID
             acid: 账户 ID
             properties: dict 类型的用户属性
+            meta: Dict[str, Any], properties 之外以带 #、$ 开头的属性
         """
         if isinstance(properties, list):
             properties = dict((key, 0) for key in properties)
         self.__add(dt_id=dt_id, acid=acid, event_name='#user_unset', send_type='user',
-                   properties_add=properties)
+                   properties_add=properties, meta=meta)
 
-    def user_set_once(self, dt_id=None, acid=None, properties=None):
+    def user_set_once(self, dt_id=None, acid=None, properties=None, meta=None):
         """
         设置用户属性, 不覆盖已存在的用户属性
 
@@ -209,11 +210,12 @@ class DTAnalytics(object):
             dt_id: 访客 ID
             acid: 账户 ID
             properties: dict 类型的用户属性
+            meta: Dict[str, Any], properties 之外以带 #、$ 开头的属性
         """
         self.__add(dt_id=dt_id, acid=acid, event_name='#user_set_once', send_type='user',
-                   properties_add=properties)
+                   properties_add=properties, meta=meta)
 
-    def user_add(self, dt_id=None, acid=None, properties=None):
+    def user_add(self, dt_id=None, acid=None, properties=None, meta=None):
         """
         对指定的数值类型的用户属性进行累加操作
 
@@ -224,11 +226,12 @@ class DTAnalytics(object):
             dt_id: 访客 ID
             acid: 账户 ID
             properties: Dict[str, int|float|double]
+            meta: Dict[str, Any], properties 之外以带 #、$ 开头的属性
         """
         self.__add(dt_id=dt_id, acid=acid, event_name='#user_add', send_type='user',
-                   properties_add=properties)
+                   properties_add=properties, meta=meta)
 
-    def user_append(self, dt_id=None, acid=None, properties=None):
+    def user_append(self, dt_id=None, acid=None, properties=None, meta=None):
         """
         对指定的**列表**类型的用户属性进行追加操作，列表内的元素都会转成字符串类型。
 
@@ -236,6 +239,7 @@ class DTAnalytics(object):
             dt_id: 访客 ID
             acid: 账户 ID
             properties:  Dict[str, list]
+            meta: Dict[str, Any], properties 之外以带 #、$ 开头的属性
         """
         for key, value in properties.items():
             if not isinstance(value, list):
@@ -243,9 +247,9 @@ class DTAnalytics(object):
             properties[key] = [str(i) for i in value]
 
         self.__add(dt_id=dt_id, acid=acid, event_name='#user_append', send_type='user',
-                   properties_add=properties)
+                   properties_add=properties, meta=meta)
 
-    def user_uniq_append(self, dt_id=None, acid=None, properties=None):
+    def user_uniq_append(self, dt_id=None, acid=None, properties=None, meta=None):
         """
         对指定的**列表**类型的用户属性进行追加操作，列表内的元素都会转成字符串类型，并对该属性的数组进行去重
 
@@ -253,6 +257,7 @@ class DTAnalytics(object):
             dt_id: 访客 ID
             acid: 账户 ID
             properties: Dict[str, list]
+            meta: Dict[str, Any], properties 之外以带 #、$ 开头的属性
         """
         for key, value in properties.items():
             if not isinstance(value, list):
@@ -260,9 +265,9 @@ class DTAnalytics(object):
             properties[key] = [str(i) for i in value]
 
         self.__add(dt_id=dt_id, acid=acid, event_name='#user_uniq_append', send_type='user',
-                   properties_add=properties)
+                   properties_add=properties, meta=meta)
 
-    def track(self, dt_id=None, acid=None, event_name=None, properties=None):
+    def track(self, dt_id=None, acid=None, event_name=None, properties=None, meta=None):
         """
         发送事件数据
 
@@ -274,12 +279,14 @@ class DTAnalytics(object):
             acid: 账户 ID
             event_name: 事件名称
             properties: 事件属性
+            meta: Dict[str, Any], properties 之外以带 #、$ 开头的属性
 
         Raises:
             DTIllegalDataException: 数据格式错误时会抛出此异常
         """
         all_properties = self._public_track_add(event_name, properties)
-        self.__add(dt_id=dt_id, acid=acid, send_type='track', event_name=event_name, properties_add=all_properties)
+        self.__add(dt_id=dt_id, acid=acid, send_type='track', event_name=event_name, properties_add=all_properties,
+                   meta=meta)
 
     def flush(self):
         """
@@ -307,7 +314,7 @@ class DTAnalytics(object):
             all_properties.update(properties)
         return all_properties
 
-    def __add(self, dt_id, acid, send_type, event_name=None, properties_add=None):
+    def __add(self, dt_id, acid, send_type, event_name=None, properties_add=None, meta=None):
         if dt_id is None and acid is None:
             raise DTMetaDataException("dt_id and acid must be set at least one")
         if (dt_id is not None and not is_str(dt_id)) or (acid is not None and not is_str(acid)):
@@ -321,10 +328,9 @@ class DTAnalytics(object):
         else:
             properties = {}
 
-        from datatower_ai.src.extra_verify import extra_verify
-        extra_verify(send_type, event_name, properties_add)
-
-        self.__movePresetProperties(["#app_id", "#bundle_id", "#android_id", "#gaid", "#dt_id", "#acid", "#event_time", "#event_syn"], data, properties)
+        import datatower_ai.src.extra_verify as extra_verify
+        self.__movePresetProperties(extra_verify.meta, data, properties)
+        self.__movePresetProperties(extra_verify.meta, data, copy.deepcopy(meta))
 
         if '#event_time' not in data:
             self.__buildData(data, '#event_time', int(time.time() * 1000))
@@ -346,6 +352,9 @@ class DTAnalytics(object):
         self.__buildData(data, '#event_name', event_name)
         self.__buildData(data, '#acid', acid)
         data['properties'] = properties
+
+        extra_verify.extra_verify(data)
+
         try:
             content = json.dumps(data, separators=(',', ':'), cls=DTDateTimeSerializer, allow_nan=False)
             log('collect data={}'.format(data))

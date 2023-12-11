@@ -31,18 +31,22 @@ class DataTest(unittest.TestCase):
     dt_id = "aaa"
     acid = "bbbb"
     event_name = "unittest"
+    
+    meta = {
+        "#bundle_id": "com.example.example",
+    }
 
     def test_meta_data(self):
         data = {"name": "test"}
-        self.dt.track(dt_id=self.dt_id, event_name=self.event_name, properties=data)
-        self.dt.track(acid=self.acid, event_name=self.event_name, properties=data)
+        self.dt.track(dt_id=self.dt_id, event_name=self.event_name, properties=data, meta=self.meta)
+        self.dt.track(acid=self.acid, event_name=self.event_name, properties=data, meta=self.meta)
 
         with pytest.raises(DTMetaDataException):
-            self.dt.track(dt_id=self.dt_id, properties=data)
+            self.dt.track(dt_id=self.dt_id, properties=data, meta=self.meta)
         with pytest.raises(DTMetaDataException):
-            self.dt.track(acid=self.dt_id, properties=data)
+            self.dt.track(acid=self.dt_id, properties=data, meta=self.meta)
         with pytest.raises(DTMetaDataException):
-            self.dt.track(event_name=self.event_name, properties=data)
+            self.dt.track(event_name=self.event_name, properties=data, meta=self.meta)
 
     def test_not_support_data_type(self):
         def func_type():
@@ -58,7 +62,7 @@ class DataTest(unittest.TestCase):
         }
 
         with pytest.raises(DTIllegalDataException):
-            self.dt.track(dt_id=self.dt_id, event_name=self.event_name, properties=data)
+            self.dt.track(dt_id=self.dt_id, event_name=self.event_name, properties=data, meta=self.meta)
             self.dt.flush()
             self.dt.close()
 
@@ -74,7 +78,7 @@ class DataTest(unittest.TestCase):
             "key9": [1, 0.1, "helloworld", nan],
         }
         with pytest.raises(DTIllegalDataException):
-            self.dt.track(dt_id=self.dt_id, event_name=self.event_name, properties=data)
+            self.dt.track(dt_id=self.dt_id, event_name=self.event_name, properties=data, meta=self.meta)
             self.dt.flush()
             self.dt.close()
 
@@ -93,7 +97,7 @@ class DataTest(unittest.TestCase):
 
         }
         with pytest.raises(DTIllegalDataException):
-            self.dt.track(dt_id=self.dt_id, event_name=self.event_name, properties=data)
+            self.dt.track(dt_id=self.dt_id, event_name=self.event_name, properties=data, meta=self.meta)
             self.dt.flush()
             self.dt.close()
 
@@ -107,6 +111,6 @@ class DataTest(unittest.TestCase):
             "key9": [1, 0.1, "helloworld", datetime.datetime.utcnow()],
             "key10": datetime.datetime.utcnow()
         }
-        self.dt.track(dt_id=self.dt_id, event_name=self.event_name, properties=data)
+        self.dt.track(dt_id=self.dt_id, event_name=self.event_name, properties=data, meta=self.meta)
         self.dt.flush()
         self.dt.close()
