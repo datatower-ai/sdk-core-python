@@ -1,0 +1,6 @@
+include LICENSE
+include README.md
+prune example
+global-exclude __pycache__
+global-exclude *.log
+global-exclude *.pyc
