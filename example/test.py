@@ -2,15 +2,17 @@
 import os
 import sys
 import logging
-from datatower_ai.sdk import DTException, DTAnalytics, BatchConsumer, AsyncBatchConsumer, DebugConsumer, DTIllegalDataException
+import time
+
+from datatower_ai.sdk import DTException, DTAnalytics, AsyncBatchConsumer, DTIllegalDataException
+from datatower_ai.src.consumer.database_cache_consumer import DatabaseCacheConsumer
 
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.append(BASE_DIR)
 
-    dt = DTAnalytics(AsyncBatchConsumer(app_id="app_id_xxxx", token="xxxxxxxxxxxxxxxxxxxxxxx",
-                                        server_url="https://test.roiquery.com/sync"))
-    # dt =DTAnalytics(BatchConsumer(app_id="app_id_xxxx", token="xxxxxxxxxxxxxxxxxxxxxxx"), debug=True)
+    dt = DTAnalytics(DatabaseCacheConsumer(app_id="app_id_xxxx", token="xxxxxxxxxxxxxxxxxxxxxxx",
+                                        server_url="https://test.roiquery.com/sync"), debug=True, log_level=logging.DEBUG)
 
     # 查看日志
     # 需要初始化logging
@@ -50,4 +52,5 @@ if __name__ == "__main__":
 
 
     # 关闭并退出dt，程序退出前需要调用此接口，避免缓存内的数据丢失
+    time.sleep(1)
     dt.close()

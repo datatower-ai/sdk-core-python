@@ -1,3 +1,4 @@
+import logging
 import random
 import time
 from abc import ABC, abstractmethod
@@ -61,7 +62,7 @@ class Worker(Thread):
         self.__latest_time = 0
         self.__allowed_overtime = allowed_overtime_ms / 1000
         self.__on_terminate = on_terminate
-        Logger.debug("[%s] is initializing", self.__name)
+        Logger.log("[%s] is initializing" % self.__name, logging.DEBUG)
 
     def run(self):
         """Keep running in the thread to grab and run the task from tasks queue.
@@ -80,13 +81,13 @@ class Worker(Thread):
                     (target_time, task) = self.__tasks.get_nowait()
                     self.__semaphore.release()
                     halt = self.__handle_task(target_time, task)
-                except TypeError as _:
+                except TypeError as e:
                     self.__tasks.put_nowait(
                         (time.time()/1000 + max(0.0, self.__allowed_overtime), _Overtime(self.__allowed_overtime))
                     )
                     self.__semaphore.release()
                     halt = False
-                    Logger.exception("Thread#run, get_nowait()")
+                    Logger.log("Thread#run, get_nowait()\n" + repr(e), logging.ERROR)
 
             if halt:
                 self.__on_terminate(self.__idx)
@@ -123,7 +124,7 @@ class Worker(Thread):
 
         # terminate signal
         if isinstance(task, _TERMINATE):
-            Logger.debug("[%s] get the terminate signal (qsize: %d)", self.__name, self.__tasks._qsize())
+            Logger.log("[%s] get the terminate signal (qsize: %d)" % (self.__name, self.__tasks._qsize()), logging.DEBUG)
             return True
 
         # delayed task
@@ -150,7 +151,7 @@ class Worker(Thread):
 
             # If overtime condition is met, terminate. Otherwise, ignore.
             if task.is_overtime(pre_time):
-                Logger.debug("[%s] get the overtime signal and confirmed", self.__name)
+                Logger.log("[%s] get the overtime signal and confirmed" % self.__name, logging.DEBUG)
                 return True
             return False
 
@@ -162,10 +163,10 @@ class Worker(Thread):
             else:
                 task()
             # Logger.debug("%s finished the task", self.__name)
-        except TypeError as _:
-            Logger.exception("[%s] Type of task is not valid, get: %s", self.__name, type(task))
-        except Exception as _:
-            Logger.exception("[%s] Exception occur during running task()", self.__name)
+        except TypeError as e:
+            Logger.log("[%s] Type of task is not valid, get: %s\n%s" % (self.__name, type(task), repr(e)), logging.ERROR)
+        except Exception as e:
+            Logger.log("[%s] Exception occur during running task()\n%s" % (self.__name, repr(e)), logging.ERROR)
 
 
 class WorkerManager:
@@ -192,7 +193,7 @@ class WorkerManager:
         :param keep_alive_ms: Keep worker alive time in milliseconds after queue is empty (not more task to do)
         :param on_all_workers_stop: Callback when all workers terminated.
         """
-        Logger.debug("[WorkerManager] WorkerManager(name: %s, size: %d) is initializing", name, size)
+        Logger.log("[WorkerManager] WorkerManager(name: %s, size: %d) is initializing" % (name, size), logging.DEBUG)
         self.__name = name
         self.__size = size
         self.__condition = Condition()
@@ -223,7 +224,7 @@ class WorkerManager:
         if self.__started:
             return
 
-        Logger.debug("[%s] is starting", self)
+        Logger.log("[%s] is starting" % self, logging.DEBUG)
         self.__workers = [
             self.__create_worker(i) for i in range(0, self.__size)
         ]
@@ -231,7 +232,7 @@ class WorkerManager:
             worker.start()
         self.__started = True
         self.__terminated = False
-        Logger.debug("[%s] is started", self)
+        Logger.log("[%s] is started" % self, logging.DEBUG)
 
     def __revive_all_workers(self):
         """Revive all stopped workers, work iff this WM is started"""
@@ -241,7 +242,7 @@ class WorkerManager:
             if not self.__workers[i].is_alive():
                 self.__workers[i] = self.__create_worker(i)
                 self.__workers[i].start()
-                Logger.debug("[%s] awaking stopped worker #%d", self, i)
+                Logger.log("[%s] awaking stopped worker #%d" % (self, i), logging.DEBUG)
 
     def execute(self, task, delay: int = 0) -> bool:
         """Dispatch the task to workers.
@@ -253,12 +254,12 @@ class WorkerManager:
         :return bool: Is this task successfully scheduled, returns False if this WorkerManager is terminated.
         """
         if self.__terminated:
-            Logger.debug("[%s] received a task, but worker manager is terminated", self)
+            Logger.log("[%s] received a task, but worker manager is terminated" % self, logging.DEBUG)
             return False
 
         self.__revive_all_workers()
         if not self.__started:
-            Logger.debug("[%s] is not started when calling execute(), starting...", self)
+            Logger.log("[%s] is not started when calling execute(), starting..." % self, logging.DEBUG)
             self.start()
 
         target_time = time.time() + delay / 1000
@@ -271,13 +272,13 @@ class WorkerManager:
 
     def terminate(self):
         """Terminate current WorkerManager and wait for all worker joined."""
+        Logger.log("TERMINATE {}, self.__started: {}, self.__terminated: {}".format(self, self.__started, self.__terminated))
         if not self.__started or self.__terminated:
             return
-        Logger.debug("[%s] terminating...", self)
+        Logger.log("[%s] terminating..." % self, logging.DEBUG)
 
-        for worker in self.__workers:
-            if worker.is_alive:
-                self.__queue.put((float("inf"), _TERMINATE_SIG))  # puts to the very last
+        for _ in range(len(self.__workers)+1):
+            self.__queue.put((float("inf"), _TERMINATE_SIG))  # puts to the very last
 
         self.__condition.acquire()
         self.__condition.notify_all()
@@ -285,15 +286,16 @@ class WorkerManager:
 
         for i in range(0, self.__size):
             worker = self.__workers[i]
-            if isinstance(worker, Worker):
+            if isinstance(worker, Worker) and worker.is_alive():
                 self.__workers[i].join()
+                Logger.log("JOINED {}, {}".format(self, i))
 
         self.__terminated = True
         self.__started = False
         self.__queue.queue.clear()
 
         self.__on_terminate()
-        Logger.debug("[%s] terminated!", self)
+        Logger.log("[%s] terminated!" % self, logging.DEBUG)
 
     def __on_worker_terminate(self, idx):
         has_alive = False
@@ -322,7 +324,7 @@ class WorkerManager:
 if __name__ == "__main__":
     def xx():
         num = random.Random().randint(0, 100)
-        Logger.debug(num)
+        Logger.log(str(num), logging.DEBUG)
 
 
     wm = WorkerManager("wmm", 5)

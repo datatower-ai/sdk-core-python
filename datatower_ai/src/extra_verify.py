@@ -25,7 +25,6 @@ __preset_event = {
 
 
 def extra_verify(dictionary: Dict[str, Any]):
-    print(dictionary)
     for prop in __compulsory_meta:
         if prop not in dictionary:
             raise DTMetaDataException("Required meta property \"{}\" is missing!".format(prop))

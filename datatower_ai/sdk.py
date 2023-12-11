@@ -10,9 +10,12 @@ import re
 import threading
 import time
 import random
-import requests
+from typing import Callable, List
+
+from datatower_ai.src.service.http_service import _HttpService
+from datatower_ai.src.util.exception import DTIllegalDataException, DTMetaDataException, DTException, DTNetworkException
+
 from datatower_ai.src.util.logger import Logger
-from requests import ConnectionError
 import logging
 
 default_server_url = "https://s2s.roiquery.com/sync"
@@ -78,32 +81,6 @@ def assert_properties(event_name, properties):
                 raise DTIllegalDataException('User_add properties must be number type')
 
 
-class DTException(Exception):
-    pass
-
-
-class DTIllegalDataException(DTException):
-    """
-    数据格式异常
-    在发送的数据格式有误时，SDK 会抛出此异常，用户应当捕获并处理.
-    """
-    pass
-
-
-class DTMetaDataException(DTException):
-    """
-    dt_id, acid, event_name, event_time 等元数据出错异常
-    """
-
-
-class DTNetworkException(DTException):
-    """
-    网络异常
-    在因为网络或者不可预知的问题导致数据无法发送时，SDK会抛出此异常，用户应当捕获并处理.
-    """
-    pass
-
-
 class DynamicSuperPropertiesTracker():
     def get_dynamic_super_properties(self):
         raise NotImplementedError
@@ -129,7 +106,7 @@ class DTAnalytics(object):
     DTAnalytics 上报数据关键实例
     """
 
-    def __init__(self, consumer, debug=False):
+    def __init__(self, consumer, debug=False, log_level=logging.INFO):
         """
         创建一个 DTAnalytics 实例
         DTAanlytics 需要与指定的 Consumer 一起使用，可以使用以下任何一种:
@@ -152,6 +129,7 @@ class DTAnalytics(object):
             '#sdk_version_name': __version__,
         }
         self.debug = debug
+        Logger.set(self.debug, log_level)
 
     def set_dynamic_super_properties_tracker(self, dynamic_super_properties_tracker):
         self.__dynamic_super_properties_tracker = dynamic_super_properties_tracker
@@ -343,9 +321,8 @@ class DTAnalytics(object):
         extra_verify.extra_verify(data)
 
         try:
-            content = json.dumps(data, separators=(',', ':'), cls=DTDateTimeSerializer, allow_nan=False)
             Logger.log('collect data={}'.format(data))
-            self.__consumer.add(content)
+            self.__consumer.add(lambda: [json.dumps(data, separators=(',', ':'), cls=DTDateTimeSerializer, allow_nan=False)])
         except TypeError as e:
             raise DTIllegalDataException(e)
         except ValueError:
@@ -435,7 +412,7 @@ class AbstractConsumer(object):
     def get_app_id(self):
         raise NotImplementedError
 
-    def add(self, msg):
+    def add(self, get_msg: Callable[[], List[str]]):
         raise NotImplementedError
 
     def flush(self):
@@ -443,121 +420,6 @@ class AbstractConsumer(object):
 
     def close(self):
         raise NotImplementedError
-
-
-class BatchConsumer(AbstractConsumer):
-    """
-    同步、批量地向 DT 服务器传输数据
-
-    通过HTTPS协议，同步地向 DT 服务器传输数据.
-    但是存在网络不稳定等原因造成数据丢失的可能，因此不建议在生产环境中使用.
-
-    触发上报的时机为以下条件满足其中之一的时候:
-    1. 数据条数大于预定义的最大值, 默认为 20 条
-    2. 数据发送间隔超过预定义的最大时间, 默认为 3 秒
-    """
-    _batchlock = threading.RLock()
-    _cachelock = threading.RLock()
-
-    def __init__(self, app_id, token, batch=20, server_url=default_server_url, timeout=30000, interval=3, compress=True,
-                 max_cache_size=50):
-        """
-        创建 BatchConsumer
-
-        Args:
-            app_id: 项目的 APP ID
-            token: 通信令牌
-            batch: 指定触发上传的数据条数, 默认为 20 条, 最大 200 条
-            timeout: 请求的超时时间, 单位毫秒, 默认为 30000 ms
-            interval: 推送数据的最大时间间隔, 单位为秒, 默认为 3 秒
-        """
-        self.__interval = interval
-        self.__batch = min(batch, 200)
-        self.__message_channel = []
-        self.__max_cache_size = max_cache_size
-        self.__cache_buffer = []
-        self.__last_flush = time.time()
-        self.__http_service = _HttpServices((urlparse(server_url)).geturl(), app_id, token, timeout)
-        self.__http_service.compress = compress
-        self.__app_id = app_id
-
-    def get_app_id(self):
-        return self.__app_id
-
-    def add(self, msg):
-        self._batchlock.acquire()
-        try:
-            self.__message_channel.append(msg)
-        finally:
-            self._batchlock.release()
-        if len(self.__message_channel) >= self.__batch \
-                or len(self.__cache_buffer) > 0:
-            self.flush_once()
-
-    def flush(self, throw_exception=True):
-        while len(self.__cache_buffer) > 0 or len(self.__message_channel) > 0:
-            try:
-                self.flush_once(throw_exception)
-            except DTIllegalDataException as e:
-                Logger.log(e, level=logging.WARNING)
-                continue
-
-    def flush_once(self, throw_exception=True):
-        if len(self.__message_channel) == 0 and len(self.__cache_buffer) == 0:
-            return
-
-        self._cachelock.acquire()
-        self._batchlock.acquire()
-        try:
-            try:
-                if len(self.__message_channel) == 0 and len(self.__cache_buffer) == 0:
-                    return
-                if len(self.__cache_buffer) == 0 or len(self.__message_channel) >= self.__batch:
-                    self.__cache_buffer.append(self.__message_channel)
-                    self.__message_channel = []
-            finally:
-                self._batchlock.release()
-            msg = self.__cache_buffer[0]
-            self.__http_service.send('[' + ','.join(msg) + ']', str(len(msg)))
-            self.__last_flush = time.time()
-            self.__cache_buffer = self.__cache_buffer[1:]
-        except DTNetworkException as e:
-            if throw_exception:
-                raise e
-        except DTIllegalDataException as e:
-            self.__cache_buffer = self.__cache_buffer[1:]
-            if throw_exception:
-                raise e
-        finally:
-            if len(self.__cache_buffer) > self.__max_cache_size:
-                self.__cache_buffer = self.__cache_buffer[1:]
-            self._cachelock.release()
-
-    def close(self):
-        self.flush()
-
-
-class DebugConsumer(AbstractConsumer):
-    def __init__(self, app_id, token, server_url=default_server_url, timeout=30000):
-
-        self.__message_channel = []
-        self.__cache_buffer = []
-        self.__last_flush = time.time()
-        self.__http_service = _HttpServices((urlparse(server_url)).geturl(), app_id, token, timeout, compress=False)
-        self.__app_id = app_id
-        DTAnalytics.enable_log(True)
-
-    def get_app_id(self):
-        return self.__app_id
-
-    def add(self, msg):
-        self.__http_service.send('[' + msg + ']', str(len(msg)))
-
-    def flush(self):
-        pass
-
-    def close(self):
-        pass
 
 
 class AsyncBatchConsumer(AbstractConsumer):
@@ -580,7 +442,10 @@ class AsyncBatchConsumer(AbstractConsumer):
             flush_size: 队列缓存的阈值，超过此值将立即进行发送
             queue_size: 缓存队列的大小
         """
-        self.__http_service = _HttpServices(urlparse(server_url).geturl(), app_id, token, 30000)
+        self.__token = token
+        self.__server_url = server_url
+
+        self.__http_service = _HttpService(30000)
         self.__batch = flush_size
         self.__queue = queue.Queue(queue_size)
 
@@ -593,9 +458,9 @@ class AsyncBatchConsumer(AbstractConsumer):
     def get_app_id(self):
         return self.__app_id
 
-    def add(self, msg):
+    def add(self, get_msg):
         try:
-            self.__queue.put_nowait(msg)
+            self.__queue.put_nowait(get_msg()[0])
         except queue.Full as e:
             raise DTNetworkException(e)
 
@@ -631,7 +496,8 @@ class AsyncBatchConsumer(AbstractConsumer):
         if len(flush_buffer) > 0:
             for i in range(3):  # 网络异常情况下重试 3 次
                 try:
-                    self.__http_service.send('[' + ','.join(flush_buffer) + ']', str(len(flush_buffer)))
+                    self.__http_service.send(urlparse(self.__server_url).geturl(), self.__app_id, self.__token,
+                                             '[' + ','.join(flush_buffer) + ']', str(len(flush_buffer)))
                     return True
                 except DTNetworkException as e:
                     Logger.log("{}: {}".format(e, flush_buffer), level=logging.WARNING)
@@ -679,66 +545,3 @@ class AsyncBatchConsumer(AbstractConsumer):
             self._finished_event.set()
 
 
-def _gzip_string(data):
-    try:
-        return gzip.compress(data)
-    except AttributeError:
-        import StringIO
-        buf = StringIO.StringIO()
-        fd = gzip.GzipFile(fileobj=buf, mode="w")
-        fd.write(data)
-        fd.close()
-        return buf.getvalue()
-
-
-class _HttpServices(object):
-    """
-    内部类，用于发送网络请求
-
-    指定接收端地址和项目 APP ID, 实现向接收端上传数据的接口. 发送前将数据默认使用 Gzip 压缩,
-    """
-
-    def __init__(self, server_uri, app_id, token, timeout=30000, compress=True):
-        self.url = server_uri
-        self.app_id = app_id
-        self.token = token
-        self.timeout = timeout
-        self.compress = compress
-
-    def send(self, data, length):
-        """使用 Requests 发送数据给服务器
-
-        Args:
-            data: 待发送的数据
-            length
-
-        Raises:
-            DTIllegalDataException: 数据错误
-            DTNetworkException: 网络错误
-        """
-        from datatower_ai.__init__ import __version__
-        headers = {'app_id': self.app_id, 'DT-type': 'python-sdk', 'sdk-version': __version__,
-                   'data-count': length, 'token': self.token}
-        try:
-            compress_type = 'gzip'
-            if self.compress:
-                data = _gzip_string(data.encode("utf-8"))
-            else:
-                compress_type = 'none'
-                data = data.encode("utf-8")
-            headers['compress'] = compress_type
-            response = requests.post(self.url, data=data, headers=headers, timeout=self.timeout)
-            if response.status_code == 200:
-                response_data = json.loads(response.text)
-                Logger.log('response={}'.format(response_data))
-                if response_data["code"] == 0:
-                    return True
-                else:
-                    raise DTIllegalDataException("Unexpected result code: " + str(response_data["code"]) \
-                                                 + " reason: " + response_data["msg"])
-            else:
-                Logger.log('response={}'.format(response.status_code))
-                raise DTNetworkException("Unexpected Http status code " + str(response.status_code))
-        except ConnectionError as e:
-            time.sleep(0.5)
-            raise DTNetworkException("Data transmission failed due to " + repr(e))
