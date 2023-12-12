@@ -2,17 +2,21 @@
 import os
 import sys
 import logging
-import time
 
-from datatower_ai.sdk import DTException, DTAnalytics, AsyncBatchConsumer, DTIllegalDataException
+from datatower_ai.sdk import DTAnalytics
 from datatower_ai.src.consumer.database_cache_consumer import DatabaseCacheConsumer
 
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.append(BASE_DIR)
 
-    dt = DTAnalytics(DatabaseCacheConsumer(app_id="app_id_xxxx", token="xxxxxxxxxxxxxxxxxxxxxxx",
-                                        server_url="https://test.roiquery.com/sync"), debug=True, log_level=logging.DEBUG)
+    dt = DTAnalytics(
+        DatabaseCacheConsumer(app_id="app_id_xxxx",
+                              token="xxxxxxxxxxxxxxxxxxxxxxx",
+                              server_url="https://test.roiqueryxxx.com/sync",
+                              thread_keep_alive_ms=1000),
+        debug=True, log_level=logging.DEBUG
+    )
 
     # 查看日志
     # 需要初始化logging
@@ -36,7 +40,8 @@ if __name__ == "__main__":
         "order": "订单号xxx"  # 自定义内容
     }
     # 设置事件数据
-    dt.track(dt_id="aaaa", acid='ddd$fff', event_name="purchase", properties=properties, meta=meta)
+    for _ in range(100000):
+        dt.track(dt_id="aaaa", acid='ddd$fff', event_name="purchase", properties=properties, meta=meta)
     # 立即发送数据
     dt.flush()
 
@@ -52,5 +57,4 @@ if __name__ == "__main__":
 
 
     # 关闭并退出dt，程序退出前需要调用此接口，避免缓存内的数据丢失
-    time.sleep(1)
-    dt.close()
+    #dt.close()

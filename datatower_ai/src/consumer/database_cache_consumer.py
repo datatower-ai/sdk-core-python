@@ -2,58 +2,67 @@ import logging
 from threading import Semaphore
 from typing import Callable, Dict, List, Tuple
 
+from datatower_ai.src.consumer.abstract_consumer import AbstractConsumer
 from datatower_ai.src.data.database.dt_database import _DTDatabase
 
 from datatower_ai.src.data.database.event_dao import DTEventEntity, DTEventDao
 
 from datatower_ai.src.service.http_service import _HttpService
+from datatower_ai.src.strategy.exceed_insertion_strategy import ExceedInsertionStrategy
 from datatower_ai.src.util.logger import Logger
 
 from datatower_ai.src.util.thread.thread import WorkerManager, Task
 
 from datatower_ai.src.util.time_monitor import TimeMonitor
 
-from datatower_ai import AbstractConsumer, default_server_url
+from datatower_ai import default_server_url
 
 
 class DatabaseCacheConsumer(AbstractConsumer):
     def __init__(self, app_id, token, server_url=default_server_url,
                  network_retries: int = 3, network_timeout: int = 30000, num_db_threads: int = 2,
-                 num_network_threads: int = 2, thread_keep_alive_ms: int = -1):
+                 num_network_threads: int = 2, thread_keep_alive_ms: int = -1,
+                 cache_size: int = 5000,
+                 exceed_insertion_strategy: ExceedInsertionStrategy = ExceedInsertionStrategy.DELETE):
         """Uploading with Database caching support, to prevent data loss.
 
         * Async
         * Database caching
 
-        :param app_id: App id (DataTower.ai dashboard)
-        :param token: Communication token (DataTower.ai dashboard)
-        :param server_url: Server url (DataTower.ai dashboard)
+        :param app_id: App id (DataTower.ai dashboard).
+        :param token: Communication token (DataTower.ai dashboard).
+        :param server_url: Server url (DataTower.ai dashboard).
         :param network_retries: Maximum of retries allowed for each uploading request.
         :param network_timeout: Allowed timeout in milliseconds of each uploading request.
         :param num_db_threads: Number of threads for Database operation (w/r).
         :param num_network_threads: Number of threads for uploading.
         :param thread_keep_alive_ms: Time in milliseconds, that the thread will be held when idle for such time. After
         this time, the thread will be terminated. BTW, those threads will be recreated once new task arrived. (
-        Valid value is >= 0. Otherwise, unlimited)
+        Valid value is >= 0. Otherwise, unlimited).
+        :param cache_size: The maximum size of cache (number of events) can be held.
+        :param exceed_insertion_strategy: The insertion strategy applied when num of records in database is
+        reached 'cache_size'.
         """
         network_timer = TimeMonitor().start("db_cache_network")
         self.__network_wm = WorkerManager("db_cache_network", num_network_threads, keep_alive_ms=thread_keep_alive_ms,
-                                          on_all_workers_stop=lambda: Logger.log("db_cache_network time used: {:.2f}, sum: {:.2f}".format(network_timer.stop(one_shot=False) - max(0, thread_keep_alive_ms), TimeMonitor().get_sum("db_cache_network"))))
+                                          on_all_workers_stop=lambda: Logger.log("[Statistics] db_cache_network time used: {:.2f}, sum: {:.2f}".format(network_timer.stop(one_shot=False) - max(0, thread_keep_alive_ms), TimeMonitor().get_sum("db_cache_network"))))
 
         database_timer = TimeMonitor().start("db_cache_database")
         self.__db_wm = WorkerManager("db_cache_database", num_db_threads, keep_alive_ms=thread_keep_alive_ms,
-                                     on_all_workers_stop=lambda: Logger.log("db_cache_database time used: {:.2f}, sum: {:.2f}".format(database_timer.stop(one_shot=False) - max(0, thread_keep_alive_ms), TimeMonitor().get_sum("db_cache_database"))))
+                                     on_all_workers_stop=lambda: Logger.log("[Statistics] db_cache_database time used: {:.2f}, sum: {:.2f}".format(database_timer.stop(one_shot=False) - max(0, thread_keep_alive_ms), TimeMonitor().get_sum("db_cache_database"))))
 
         self.__http_service = _HttpService(network_timeout, network_retries)
         self.__app_id = app_id
         self.__token = token
         self.__server_url = server_url
+        self.__cache_size = cache_size
+        self.__exceed_insertion_strategy = exceed_insertion_strategy
 
     def get_app_id(self):
         return self.__app_id
 
     def add(self, get_msg: Callable[[], List[str]]):
-        self.__db_wm.execute(lambda: self.__insert_to_db(get_msg))
+        self.__db_wm.execute(lambda: self.__insert_to_db(get_msg, self.__cache_size, self.__exceed_insertion_strategy))
 
     def flush(self):
         self.__query_from_db()
@@ -62,13 +71,13 @@ class DatabaseCacheConsumer(AbstractConsumer):
         self.__network_wm.terminate()
         self.__db_wm.terminate()
 
-    def __insert_to_db(self, get_data: Callable[[], List[str]]):
+    def __insert_to_db(self, get_data: Callable[[], List[str]], cache_size: int, strategy: ExceedInsertionStrategy):
         data = get_data()
 
         events = [DTEventEntity(x, self.__app_id, self.__server_url, self.__token) for x in data]
 
         timer = TimeMonitor().start("UploadFromDbTask-insert")
-        _DTDatabase().event_dao.insert_batch(*events)
+        _DTDatabase().event_dao.insert_batch(*events, cache_size=cache_size, strategy=strategy)
         timer.stop(one_shot=False, acc_num=len(events))
 
         self.__db_wm.execute(self.__query_from_db)

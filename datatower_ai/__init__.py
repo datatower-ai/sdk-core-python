@@ -1,12 +1,11 @@
 from datatower_ai.sdk import *
-
-__version__ = '3.0.0-dev1'
+from datatower_ai.src.consumer.async_batch_consumer import AsyncBatchConsumer
+from datatower_ai.src.consumer.database_cache_consumer import DatabaseCacheConsumer
 
 __all__ = [
     'DTAnalytics',
-    'BatchConsumer',
-    'DebugConsumer',
     'AsyncBatchConsumer',
+    'DatabaseCacheConsumer',
     'DTException',
     'DTIllegalDataException',
     'DTNetworkException',

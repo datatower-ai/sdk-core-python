@@ -46,7 +46,7 @@ class _HttpService(object):
             DTIllegalDataException: 数据错误
             DTNetworkException: 网络错误
         """
-        from datatower_ai.__init__ import __version__
+        from datatower_ai.__version__ import __version__
         headers = {'app_id': app_id, 'DT-type': 'python-sdk', 'sdk-version': __version__,
                    'data-count': length, 'token': token}
         try:
