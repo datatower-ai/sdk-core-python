@@ -3,21 +3,26 @@ import os
 import sys
 import logging
 
-from datatower_ai.sdk import DTAnalytics
-from datatower_ai.src.consumer.database_cache_consumer import DatabaseCacheConsumer
-from datatower_ai.src.strategy.exceed_insertion_strategy import ExceedInsertionStrategy
+from datatower_ai import *
 
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.append(BASE_DIR)
 
+    # dt = DTAnalytics(
+    #     DatabaseCacheConsumer(app_id="app_id_xxxx",
+    #                           token="xxxxxxxxxxxxxxxxxxxxxxx",
+    #                           server_url="https://test.roiqueryxxx.com/sync",
+    #                           thread_keep_alive_ms=1000,
+    #                           exceed_insertion_strategy=ExceedInsertionStrategy.IGNORE),
+    #     debug=True, log_level=logging.INFO
+    # )
+
     dt = DTAnalytics(
-        DatabaseCacheConsumer(app_id="app_id_xxxx",
+        AsyncBatchConsumer(app_id="app_id_xxxx",
                               token="xxxxxxxxxxxxxxxxxxxxxxx",
-                              server_url="https://test.roiqueryxxx.com/sync",
-                              thread_keep_alive_ms=1000,
-                              exceed_insertion_strategy=ExceedInsertionStrategy.IGNORE),
-        debug=True, log_level=logging.INFO
+                              server_url="https://test.roiqueryxxx.com/sync",),
+        debug=True, log_level=logging.DEBUG
     )
 
     # 查看日志
@@ -42,7 +47,7 @@ if __name__ == "__main__":
         "order": "订单号xxx"  # 自定义内容
     }
     # 设置事件数据
-    for _ in range(100000):
+    for _ in range(100):
         dt.track(dt_id="aaaa", acid='ddd$fff', event_name="purchase", properties=properties, meta=meta)
     # 立即发送数据
     dt.flush()
@@ -59,4 +64,4 @@ if __name__ == "__main__":
 
 
     # 关闭并退出dt，程序退出前需要调用此接口，避免缓存内的数据丢失
-    #dt.close()
+    dt.close()

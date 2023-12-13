@@ -45,14 +45,14 @@ class DatabaseCacheConsumer(AbstractConsumer):
         reached 'cache_size'.
         """
         network_timer = TimeMonitor().start("db_cache_network")
-        self.__network_wm = WorkerManager("db_cache_network", num_network_threads, keep_alive_ms=thread_keep_alive_ms,
+        self.__network_wm = WorkerManager("db_cache_network", max(1, num_network_threads), keep_alive_ms=thread_keep_alive_ms,
                                           on_all_workers_stop=lambda: network_timer.stop(one_shot=False))
 
         database_timer = TimeMonitor().start("db_cache_database")
-        self.__db_wm = WorkerManager("db_cache_database", num_db_threads, keep_alive_ms=thread_keep_alive_ms,
+        self.__db_wm = WorkerManager("db_cache_database", max(1, num_db_threads), keep_alive_ms=thread_keep_alive_ms,
                                      on_all_workers_stop=lambda: database_timer.stop(one_shot=False))
 
-        self.__http_service = _HttpService(network_timeout, network_retries)
+        self.__http_service = _HttpService(max(0, network_timeout), max(0, network_retries))
         self.__app_id = app_id
         self.__token = token
         self.__server_url = server_url
@@ -249,7 +249,7 @@ class _UploadTask(Task):
 
             timer = TimeMonitor().start("UploadFromDbTask-send")
             try:
-                # is_success = self.__http_service.send(
+                # is_success = self.__http_service.post_event(
                 #     app_id=app_id,
                 #     server_url=server_url,
                 #     token=token,

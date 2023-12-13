@@ -24,12 +24,6 @@ __NAME_PATTERN = re.compile(r"^[#$a-zA-Z][a-zA-Z0-9_]{0,63}$", re.I)
 _STR_LD = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 
 try:
-    import queue
-    from urllib.parse import urlparse
-except ImportError:
-    import Queue as queue
-    from urlparse import urlparse
-try:
     isinstance("", basestring)
 
 

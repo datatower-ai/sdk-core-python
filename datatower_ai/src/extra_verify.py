@@ -41,7 +41,7 @@ def extra_verify(dictionary: Dict[str, Any]):
     if ac_id is not None and not isinstance(ac_id, str):
         raise DTMetaDataException("acid should be str!")
 
-    event_name: str = dictionary["#event_name"]
+    event_name = dictionary["#event_name"]
     if not __name_regex.match(event_name):
         raise DTMetaDataException("event_name must be a valid variable name.")
 

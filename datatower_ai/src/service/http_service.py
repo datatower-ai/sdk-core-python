@@ -1,9 +1,11 @@
 import gzip
 import json
 import logging
-import time
 from typing import Dict, Optional, Union
-from urllib.parse import urlparse
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 
 import requests
 from datatower_ai.src.util.exception import DTIllegalDataException, DTNetworkException
@@ -37,7 +39,7 @@ class _HttpService(object):
         self.compress = compress
         self.retries = retries
 
-    def post_event(self, server_url: str, app_id: str, token: str, data, length):
+    def post_event(self, server_url: str, app_id: str, token: str, data, length) -> bool:
         """使用 Requests 发送数据给服务器
 
         Args:
@@ -77,8 +79,9 @@ class _HttpService(object):
                     Logger.log('response={}'.format(response.status_code))
                     raise DTNetworkException("Unexpected Http status code " + str(response.status_code))
         except ConnectionError as e:
-            time.sleep(0.5)
             raise DTNetworkException("Data transmission failed due to " + repr(e))
+        except Exception as e:
+            raise DTNetworkException("Http failed due to " + repr(e))
 
     def post_raw(self, url: str, data: Union[str, Dict], headers: Optional[Dict] = None) -> bool:
         try:

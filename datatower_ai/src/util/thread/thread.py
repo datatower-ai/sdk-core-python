@@ -124,7 +124,7 @@ class Worker(Thread):
 
         # terminate signal
         if isinstance(task, _TERMINATE):
-            Logger.log("[%s] get the terminate signal (qsize: %d)" % (self.__name, self.__tasks._qsize()), logging.DEBUG)
+            Logger.log("[%s] get the terminate signal (qsize: %d)" % (self.__name, self.__tasks.qsize()), logging.DEBUG)
             return True
 
         # delayed task
@@ -164,7 +164,9 @@ class Worker(Thread):
                 task()
             # Logger.debug("%s finished the task", self.__name)
         except TypeError as e:
-            Logger.log("[%s] Type of task is not valid, get: %s\n%s" % (self.__name, type(task), repr(e)), logging.ERROR)
+            Logger.log(
+                "[%s] Type of task is not valid, get: %s\n%s" % (self.__name, type(task), repr(e)), logging.ERROR
+            )
         except Exception as e:
             Logger.log("[%s] Exception occur during running task()\n%s" % (self.__name, repr(e)), logging.ERROR)
 
@@ -272,7 +274,11 @@ class WorkerManager:
 
     def terminate(self):
         """Terminate current WorkerManager and wait for all worker joined."""
-        Logger.log("TERMINATE {}, self.__started: {}, self.__terminated: {}".format(self, self.__started, self.__terminated))
+        Logger.log(
+            "TERMINATE {}, self.__started: {}, self.__terminated: {}".format(
+                self, self.__started, self.__terminated
+            )
+        )
         if not self.__started or self.__terminated:
             return
         Logger.log("[%s] terminating..." % self, logging.DEBUG)

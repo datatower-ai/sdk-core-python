@@ -28,7 +28,7 @@ class _DTQualityHelper(Singleton):
     }
 
     def __init__(self):
-        self.__wm: Optional[WorkerManager] = None
+        self.__wm = None
 
     def report_quality_message(self, app_id: str, code: int, msg: str,
                                level: _DTQualityLevel = _DTQualityLevel.ERROR,
