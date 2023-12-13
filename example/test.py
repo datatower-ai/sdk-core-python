@@ -5,6 +5,7 @@ import logging
 
 from datatower_ai.sdk import DTAnalytics
 from datatower_ai.src.consumer.database_cache_consumer import DatabaseCacheConsumer
+from datatower_ai.src.strategy.exceed_insertion_strategy import ExceedInsertionStrategy
 
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -14,8 +15,9 @@ if __name__ == "__main__":
         DatabaseCacheConsumer(app_id="app_id_xxxx",
                               token="xxxxxxxxxxxxxxxxxxxxxxx",
                               server_url="https://test.roiqueryxxx.com/sync",
-                              thread_keep_alive_ms=1000),
-        debug=True, log_level=logging.DEBUG
+                              thread_keep_alive_ms=1000,
+                              exceed_insertion_strategy=ExceedInsertionStrategy.IGNORE),
+        debug=True, log_level=logging.INFO
     )
 
     # 查看日志

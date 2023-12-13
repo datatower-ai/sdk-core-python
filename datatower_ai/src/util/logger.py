@@ -32,3 +32,22 @@ class Logger:
             else:
                 Logger.logger.error(msg)
 
+    @staticmethod
+    def debug(msg):
+        Logger.log(msg, logging.DEBUG)
+
+    @staticmethod
+    def info(msg):
+        Logger.log(msg, logging.INFO)
+
+    @staticmethod
+    def warning(msg):
+        Logger.log(msg, logging.WARNING)
+
+    @staticmethod
+    def error(msg):
+        Logger.log(msg, logging.ERROR)
+
+    @staticmethod
+    def exception(msg=""):
+        Logger.logger.exception(msg)

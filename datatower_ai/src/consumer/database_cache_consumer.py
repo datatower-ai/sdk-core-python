@@ -10,10 +10,11 @@ from datatower_ai.src.data.database.event_dao import DTEventEntity, DTEventDao
 from datatower_ai.src.service.http_service import _HttpService
 from datatower_ai.src.strategy.exceed_insertion_strategy import ExceedInsertionStrategy
 from datatower_ai.src.util.logger import Logger
+from datatower_ai.src.util.performance.counter_monitor import CounterMonitor
 
 from datatower_ai.src.util.thread.thread import WorkerManager, Task
 
-from datatower_ai.src.util.time_monitor import TimeMonitor
+from datatower_ai.src.util.performance.time_monitor import TimeMonitor
 
 from datatower_ai import default_server_url
 
@@ -45,11 +46,11 @@ class DatabaseCacheConsumer(AbstractConsumer):
         """
         network_timer = TimeMonitor().start("db_cache_network")
         self.__network_wm = WorkerManager("db_cache_network", num_network_threads, keep_alive_ms=thread_keep_alive_ms,
-                                          on_all_workers_stop=lambda: Logger.log("[Statistics] db_cache_network time used: {:.2f}, sum: {:.2f}".format(network_timer.stop(one_shot=False) - max(0, thread_keep_alive_ms), TimeMonitor().get_sum("db_cache_network"))))
+                                          on_all_workers_stop=lambda: network_timer.stop(one_shot=False))
 
         database_timer = TimeMonitor().start("db_cache_database")
         self.__db_wm = WorkerManager("db_cache_database", num_db_threads, keep_alive_ms=thread_keep_alive_ms,
-                                     on_all_workers_stop=lambda: Logger.log("[Statistics] db_cache_database time used: {:.2f}, sum: {:.2f}".format(database_timer.stop(one_shot=False) - max(0, thread_keep_alive_ms), TimeMonitor().get_sum("db_cache_database"))))
+                                     on_all_workers_stop=lambda: database_timer.stop(one_shot=False))
 
         self.__http_service = _HttpService(network_timeout, network_retries)
         self.__app_id = app_id
@@ -78,7 +79,8 @@ class DatabaseCacheConsumer(AbstractConsumer):
 
         timer = TimeMonitor().start("UploadFromDbTask-insert")
         _DTDatabase().event_dao.insert_batch(*events, cache_size=cache_size, strategy=strategy)
-        timer.stop(one_shot=False, acc_num=len(events))
+        timer.stop(one_shot=False)
+        CounterMonitor["UploadFromDbTask-insert"] += len(events)
 
         self.__db_wm.execute(self.__query_from_db)
 
@@ -86,23 +88,36 @@ class DatabaseCacheConsumer(AbstractConsumer):
         self.__db_wm.execute(_QueryFromDbTask(self.__db_wm, self.__network_wm, self.__http_service))
 
     def __del__(self):
-        Logger.log(
-            "[Statistics] Query time sum: {}, avg: {}, acc: {}".format(TimeMonitor().get_sum("UploadFromDbTask-query"),
-                                                                       TimeMonitor().get_avg("UploadFromDbTask-query"),
-                                                                       TimeMonitor().get_acc("UploadFromDbTask-query")))
-        Logger.log("[Statistics] Insert time sum: {}, avg: {}, acc: {}".format(
+        Logger.log("="*80)
+        Logger.log("[Statistics] db_cache_network time used: {:.2f}".format(
+            TimeMonitor().get_sum("db_cache_network"))
+        )
+        Logger.log("[Statistics] db_cache_database time used: {:.2f}".format(
+            TimeMonitor().get_sum("db_cache_database"))
+        )
+        Logger.log("[Statistics] 'Query' time sum: {:.2f}, avg: {:.2f}, count: {}".format(
+            TimeMonitor().get_sum("UploadFromDbTask-query"),
+            TimeMonitor().get_avg("UploadFromDbTask-query"),
+            CounterMonitor["UploadFromDbTask-query"]))
+        Logger.log("[Statistics] 'Insert' time sum: {:.2f}, avg: {:.2f}, count: {}".format(
             TimeMonitor().get_sum("UploadFromDbTask-insert"),
             TimeMonitor().get_avg("UploadFromDbTask-insert"),
-            TimeMonitor().get_acc("UploadFromDbTask-insert")))
-        Logger.log("[Statistics] delete time sum: {}, avg: {}, acc: {}".format(
+            CounterMonitor["UploadFromDbTask-insert"]))
+        Logger.log("[Statistics] 'delete' time sum: {:.2f}, avg: {:.2f}, count: {}".format(
             TimeMonitor().get_sum("UploadFromDbTask-delete"),
             TimeMonitor().get_avg("UploadFromDbTask-delete"),
-            TimeMonitor().get_acc("UploadFromDbTask-delete")))
-        Logger.log(
-            "[Statistics] Update time sum: {}, avg: {}, acc: {}".format(
-                TimeMonitor().get_sum("UploadFromDbTask-update_unquired"),
-                TimeMonitor().get_avg("UploadFromDbTask-update_unquired"),
-                TimeMonitor().get_acc("UploadFromDbTask-update_unquired")))
+            CounterMonitor["UploadFromDbTask-delete"]))
+        Logger.log("[Statistics] 'Update' time sum: {:.2f}, avg: {:.2f}, count: {}".format(
+            TimeMonitor().get_sum("UploadFromDbTask-update_unquired"),
+            TimeMonitor().get_avg("UploadFromDbTask-update_unquired"),
+            CounterMonitor["UploadFromDbTask-update_unquired"]))
+        Logger.log("[Statistics] 'Send' time sum: {:.2f}, avg: {:.2f}, count: {}".format(
+            TimeMonitor().get_sum("UploadFromDbTask-send"),
+            TimeMonitor().get_avg("UploadFromDbTask-send"),
+            CounterMonitor["UploadFromDbTask-send"]))
+        Logger.log("[Statistics] total success: {}, total failed: {}".format(
+            CounterMonitor["UploadFromDbTask-success"], CounterMonitor["UploadFromDbTask-fail"]))
+        Logger.log("="*80)
 
 
 class _QueryFromDbTask(Task):
@@ -110,10 +125,6 @@ class _QueryFromDbTask(Task):
     __is_doing = False
 
     __sem = Semaphore()
-
-    n = 0
-    f = 0
-    __sem_count = Semaphore()
 
     def __init__(self, db_wm, nw_wm, http_service):
         self.__db_wm = db_wm
@@ -179,28 +190,31 @@ class _QueryFromDbTask(Task):
             entities = dao.query_batch(limit=batch_size, offset=offset)
         else:
             entities = dao.query_all()
-        timer.stop(one_shot=len(entities) <= 0, acc_num=len(entities))
+        timer.stop(one_shot=len(entities) <= 0)
+        CounterMonitor["UploadFromDbTask-query"] += len(entities)
         return entities
 
     def __after_upload(self, success: bool, ids: List[Tuple[int]]):
         """Ensure all uploading is done whatever succeed or failed, before calling phase end"""
-        _QueryFromDbTask.__sem_count.acquire()
         if success:
-            _QueryFromDbTask.n += len(ids)
+            CounterMonitor["UploadFromDbTask-success"] += len(ids)
         else:
-            _QueryFromDbTask.f += len(ids)
-        _QueryFromDbTask.__sem_count.release()
+            CounterMonitor["UploadFromDbTask-fail"] += len(ids)
 
         if success:
             timer = TimeMonitor().start("UploadFromDbTask-delete")
             self.__db_wm.execute(lambda: _DTDatabase().event_dao.delete_by_ids(ids))
-            timer.stop(one_shot=False, acc_num=len(ids))
+            timer.stop(one_shot=False)
+            CounterMonitor["UploadFromDbTask-delete"] += len(ids)
         else:
             timer = TimeMonitor().start("UploadFromDbTask-update_unquired")
             self.__db_wm.execute(lambda: _DTDatabase().event_dao.restore_to_unquired(ids))
-            timer.stop(one_shot=False, acc_num=len(ids))
+            timer.stop(one_shot=False)
+            CounterMonitor["UploadFromDbTask-update_unquired"] += len(ids)
 
-        Logger.log("[Upload Statistic] total success: %d, total failed: %d" % (_QueryFromDbTask.n, _QueryFromDbTask.f), logging.INFO)
+        Logger.log("[Upload Statistic] total success: %s, total failed: %s" % (
+            CounterMonitor["UploadFromDbTask-success"], CounterMonitor["UploadFromDbTask-fail"]
+        ), logging.INFO)
 
     def __phase_end(self, no_need_upload: bool = False):
         #Logger.debug("[ReadFromDbAndUpload] Phase finished, has_pending: {}".format(_QueryFromDbTask.__has_pending_task))
@@ -234,15 +248,21 @@ class _UploadTask(Task):
             data = '[' + ','.join(map(lambda x: x.data, self.__entities)) + ']'
 
             timer = TimeMonitor().start("UploadFromDbTask-send")
-            # is_success = self.__http_service.send(
-            #     app_id=app_id,
-            #     server_url=server_url,
-            #     token=token,
-            #     data=data,
-            #     length=str(len(self.__entities))
-            # )
-            is_success = True
-            timer.stop(one_shot=False, acc_num=len(self.__entities))
+            try:
+                # is_success = self.__http_service.send(
+                #     app_id=app_id,
+                #     server_url=server_url,
+                #     token=token,
+                #     data=data,
+                #     length=str(len(self.__entities))
+                # )
+
+                is_success = True       # TODO: REMOVE ME
+            except:
+                Logger.exception("UploadFromDbTask#send")
+            finally:
+                timer.stop(one_shot=False)
+                CounterMonitor["UploadFromDbTask-send"] += len(self.__entities) if is_success else 0
 
             if is_success:
                 Logger.log("[UploadTask] Uploaded {} events! ({}, {})".format(len(self.__entities), server_url, app_id), logging.DEBUG)

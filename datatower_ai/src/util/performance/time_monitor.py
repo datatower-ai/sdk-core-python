@@ -11,7 +11,7 @@ from datatower_ai.src.util.singleton import Singleton
 class TmTimer:
     def __init__(self,
                  key: Optional[str] = None,
-                 record_func: Optional[Callable[[str, float, float], None]] = None
+                 record_func: Optional[Callable[[str, float], None]] = None
                  ):
         """This timer will automatically be started when TimeMonitor().start called"""
         self.__key = key
@@ -38,11 +38,10 @@ class TmTimer:
             Logger.log("[TimeMonitor] Timer resume is called (\"%s\") but the timer is not paused!" % self.__key,
                        logging.WARNING)
 
-    def stop(self, one_shot: bool = True, acc_num: float = 0) -> float:
+    def stop(self, one_shot: bool = True) -> float:
         """Get current time used from start to stop except pausing gap in milliseconds, -1 if such index not start yet.
 
         :param one_shot: Only use once. If True, will not be saved and not track further state (e.g. sum, avg).
-        :param acc_num: The number added to accumulator, can be queried by TimeMonitor().get_acc("{key}")
         """
         if self.__status == 2:
             Logger.log("[TimeMonitor] Timer stop is called (\"%s\") but the timer is stopped already!" % self.__key,
@@ -55,7 +54,7 @@ class TmTimer:
         self.__status = 2
         self.__start_time = 0
         if not one_shot and self.__record_func is not None and self.__key is not None:
-            self.__record_func(self.__key, self.__total_time, acc_num)
+            self.__record_func(self.__key, self.__total_time)
         return self.__total_time * 1000
 
     def peek(self) -> float:
@@ -85,17 +84,17 @@ class TimeMonitor(Singleton):
     __sem = Semaphore()
 
     def __init__(self):
-        self.__table: Dict[str, Tuple] = {}     # {"key": (avg, count, acc)}
+        self.__table: Dict[str, Tuple] = {}     # {"key": (avg, count)}
 
     def start(self, key: str) -> TmTimer:
         return TmTimer(key, self._record)
 
-    def _record(self, key: str, elapsed: float, num: float):
+    def _record(self, key: str, elapsed: float):
         is_get = TimeMonitor.__sem.acquire(timeout=0.01)
         if not is_get:
             return
-        tp = self.__table.get(key, (0, 0, 0))
-        new_tp = ((tp[0] * tp[1] + elapsed) / (tp[1] + 1), tp[1] + 1, tp[2] + num)
+        tp = self.__table.get(key, (0, 0))
+        new_tp = ((tp[0] * tp[1] + elapsed) / (tp[1] + 1), tp[1] + 1)
         self.__table[key] = new_tp
         TimeMonitor.__sem.release()
 
@@ -119,11 +118,6 @@ class TimeMonitor(Singleton):
         if key not in self.__table:
             return -1
         return self.__table[key][1]
-
-    def get_acc(self, key: str) -> float:
-        if key not in self.__table:
-            return -1
-        return self.__table[key][2]
 
     def delete(self, key: str) -> Tuple:
         if key not in self.__table:

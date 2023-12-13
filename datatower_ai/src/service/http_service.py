@@ -1,6 +1,8 @@
 import gzip
 import json
+import logging
 import time
+from typing import Dict, Optional, Union
 from urllib.parse import urlparse
 
 import requests
@@ -30,12 +32,12 @@ class _HttpService(object):
     指定接收端地址和项目 APP ID, 实现向接收端上传数据的接口. 发送前将数据默认使用 Gzip 压缩,
     """
 
-    def __init__(self, timeout=30000, retries: int = 3, compress=True):
+    def __init__(self, timeout=3000, retries: int = 3, compress=True):
         self.timeout = timeout
         self.compress = compress
         self.retries = retries
 
-    def send(self, server_url: str, app_id: str, token: str, data, length):
+    def post_event(self, server_url: str, app_id: str, token: str, data, length):
         """使用 Requests 发送数据给服务器
 
         Args:
@@ -65,7 +67,7 @@ class _HttpService(object):
 
                 if response.status_code == 200:
                     response_data = json.loads(response.text)
-                    Logger.log('response={}'.format(response_data))
+                    Logger.log('response={}'.format(response_data), logging.DEBUG)
                     if response_data["code"] == 0:
                         return True
                     else:
@@ -77,3 +79,29 @@ class _HttpService(object):
         except ConnectionError as e:
             time.sleep(0.5)
             raise DTNetworkException("Data transmission failed due to " + repr(e))
+
+    def post_raw(self, url: str, data: Union[str, Dict], headers: Optional[Dict] = None) -> bool:
+        try:
+            with requests.Session() as s:
+                retry = Retry(total=self.retries, backoff_factor=0.3)
+                s.mount("https://", HTTPAdapter(max_retries=retry))
+                response = s.post(urlparse(url).geturl(), data=data, headers=headers, timeout=self.timeout)
+
+                if response.status_code == 200:
+                    response_data = json.loads(response.text)
+                    if response_data["code"] == 0:
+                        return True
+                    else:
+                        Logger.error(
+                            "[HttpService] post_raw: Unexpected result code: {}, reason: {}".format(
+                                response_data["code"], response_data["msg"]
+                            )
+                        )
+                else:
+                    Logger.error(
+                        "[HttpService] post_raw: Unexpected Http status code {}, {}".format(response.status_code, response)
+                    )
+            return False
+        except ConnectionError as _:
+            Logger.exception("[HttpService] post_raw: Data transmission failed")
+            return False

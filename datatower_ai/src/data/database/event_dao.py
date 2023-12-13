@@ -84,7 +84,7 @@ class DTEventEntity:
     def delete_oldest_statement(num: int = 1):
         return """
         DELETE FROM %s WHERE _id IN (
-            SELECT id FROM %s ORDER BY created_at LIMIT %d
+            SELECT _id FROM %s ORDER BY created_at LIMIT %d
         );
         """ % (_table_name, _table_name, num)
 
@@ -116,7 +116,7 @@ class DTEventDao:
     ):
         self.__write_func = write_func
         self.__read_func = read_func
-        self.__virtual_size = 0
+        self.__virtual_size = -1    # get db len at first run.
 
     @staticmethod
     def create(cursor: Cursor):
@@ -158,6 +158,7 @@ class DTEventDao:
         for i in range(beg, end):
             c.execute(entities[i].insert_statement())
         self.__virtual_size += end - beg
+        from datatower_ai.src.util.logger import Logger
 
     def __get_insert_range(self, c: Cursor, entities_size: int,
                            cache_size: int, strategy: ExceedInsertionStrategy) -> (int, int):
@@ -167,6 +168,7 @@ class DTEventDao:
         if cache_size > 0 and exceed > 0:
             if strategy == ExceedInsertionStrategy.DELETE:
                 c.execute(DTEventEntity.delete_oldest_statement(exceed))
+                self.__virtual_size -= exceed
                 return 0, entities_size
             elif strategy == ExceedInsertionStrategy.DISCARD:
                 return 0, entities_size - exceed
@@ -235,7 +237,13 @@ class DTEventDao:
         # return result
 
         # Uses virtual size instead of querying actual size (I/O) to saving time.
-        return max(0, self.__virtual_size)
+        if self.__virtual_size < 0:
+            result = self.__read_func(self.__size)
+            if result is None:
+                self.__virtual_size = 0
+            else:
+                self.__virtual_size = max(0, result)
+        return self.__virtual_size
 
     @staticmethod
     def __size(c: Cursor):
