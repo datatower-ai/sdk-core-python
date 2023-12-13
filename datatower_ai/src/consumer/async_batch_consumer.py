@@ -1,4 +1,7 @@
 import logging
+
+from datatower_ai.src.util.performance.time_monitor import TimeMonitor
+
 try:
     import queue
 except ImportError:
@@ -114,24 +117,32 @@ class AsyncBatchConsumer(AbstractConsumer):
 
         if len(self.__flush_buffer) > 0:
             for i in range(3):  # 网络异常情况下重试 3 次
+                timer = TimeMonitor().start("async_batch-upload")
                 try:
                     self.__http_service.post_event(
                         self.__server_url, self.__app_id, self.__token,
                         '[' + ','.join(self.__flush_buffer) + ']', str(len(self.__flush_buffer))
                     )
+                    timer.stop(one_shot=False)
                     CounterMonitor["async_batch-upload_success"] += len(self.__flush_buffer)
                     self.__flush_buffer.clear()
                     return True
                 except DTNetworkException as e:
+                    timer.stop(one_shot=False)
                     Logger.log("{}: {}".format(e, self.__flush_buffer), level=logging.WARNING)
                     continue
                 except DTIllegalDataException as e:
+                    timer.stop(one_shot=False)
                     Logger.log("{}: {}".format(e, self.__flush_buffer), level=logging.WARNING)
                     break
             Logger.log("{}: {}".format("Data translate failed 3 times", self.__flush_buffer), level=logging.ERROR)
 
     def __del__(self):
+        tm = TimeMonitor()
         Logger.log("="*80)
+        Logger.log("[Statistics] 'upload' time used sum: {}, avg: {}".format(
+            tm.get_sum("async_batch-upload"), tm.get_avg("async_batch-upload")
+        ))
         Logger.log("[Statistics] 'track' count: {}".format(CounterMonitor["async_batch-insert"]))
         Logger.log("[Statistics] 'uploaded' count: {}".format(CounterMonitor["async_batch-upload_success"]))
         Logger.log("="*80)

@@ -20,8 +20,9 @@ if __name__ == "__main__":
 
     dt = DTAnalytics(
         AsyncBatchConsumer(app_id="app_id_xxxx",
-                              token="xxxxxxxxxxxxxxxxxxxxxxx",
-                              server_url="https://test.roiqueryxxx.com/sync",),
+                           token="xxxxxxxxxxxxxxxxxxxxxxx",
+                           server_url="https://test.roiqueryxxx.com/sync",
+                           close_retry=0),
         debug=True, log_level=logging.DEBUG
     )
 

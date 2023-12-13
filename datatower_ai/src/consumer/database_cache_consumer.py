@@ -164,7 +164,7 @@ class _QueryFromDbTask(Task):
             num_queried += len(entities)
 
             # group by app_id, server_url, token
-            grouped: Dict[str, List] = {}
+            grouped = {}
             for entity in entities:
                 key = "{}${}${}".format(entity.app_id, entity.server_url, entity.token)
                 if key in grouped:
@@ -249,15 +249,13 @@ class _UploadTask(Task):
 
             timer = TimeMonitor().start("UploadFromDbTask-send")
             try:
-                # is_success = self.__http_service.post_event(
-                #     app_id=app_id,
-                #     server_url=server_url,
-                #     token=token,
-                #     data=data,
-                #     length=str(len(self.__entities))
-                # )
-
-                is_success = True       # TODO: REMOVE ME
+                is_success = self.__http_service.post_event(
+                    app_id=app_id,
+                    server_url=server_url,
+                    token=token,
+                    data=data,
+                    length=str(len(self.__entities))
+                )
             except:
                 Logger.exception("UploadFromDbTask#send")
             finally:

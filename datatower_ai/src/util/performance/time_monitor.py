@@ -84,7 +84,7 @@ class TimeMonitor(Singleton):
     __sem = Semaphore()
 
     def __init__(self):
-        self.__table: Dict[str, Tuple] = {}     # {"key": (avg, count)}
+        self.__table = {}     # {"key": (avg, count)}
 
     def start(self, key: str) -> TmTimer:
         return TmTimer(key, self._record)
