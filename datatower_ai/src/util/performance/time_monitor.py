@@ -26,8 +26,9 @@ class TmTimer:
             self.__total_time += time.time() - self.__start_time
             self.__status = 1
         else:
-            Logger.log("[TimeMonitor] Timer pause is called (\"%s\") but the timer is not started!" % self.__key,
-                       logging.WARNING)
+            Logger.warning("[TimeMonitor] Timer pause is called (\"%s\") but the timer is not started (%d)!" % (
+                self.__key, self.__status
+            ))
 
     def resume(self):
         """Resume the timer, worked only if it's paused"""
@@ -35,8 +36,7 @@ class TmTimer:
             self.__start_time = time.time()
             self.__status = 0
         else:
-            Logger.log("[TimeMonitor] Timer resume is called (\"%s\") but the timer is not paused!" % self.__key,
-                       logging.WARNING)
+            Logger.warning("[TimeMonitor] Timer resume is called (\"%s\") but the timer is not paused (%d)!" % (self.__key, self.__status))
 
     def stop(self, one_shot: bool = True) -> float:
         """Get current time used from start to stop except pausing gap in milliseconds, -1 if such index not start yet.
@@ -44,8 +44,7 @@ class TmTimer:
         :param one_shot: Only use once. If True, will not be saved and not track further state (e.g. sum, avg).
         """
         if self.__status == 2:
-            Logger.log("[TimeMonitor] Timer stop is called (\"%s\") but the timer is stopped already!" % self.__key,
-                       logging.WARNING)
+            Logger.warning("[TimeMonitor] Timer stop is called (\"%s\") but the timer is stopped already!" % self.__key)
             return -1
 
         if self.__status == 0:

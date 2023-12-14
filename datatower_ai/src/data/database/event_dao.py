@@ -138,6 +138,7 @@ class DTEventDao:
     def __insert_inner(self, c: Cursor, entity: DTEventEntity, cache_size: int, strategy: ExceedInsertionStrategy):
         (beg, end) = self.__get_insert_range(c, 1, cache_size, strategy)
 
+        self.invalidate_virtual_size(c)
         if beg < end:
             c.execute(entity.insert_statement())
             self.__virtual_size += 1
@@ -155,10 +156,10 @@ class DTEventDao:
                              cache_size: int, strategy: ExceedInsertionStrategy):
         (beg, end) = self.__get_insert_range(c, len(entities), cache_size, strategy)
 
+        self.invalidate_virtual_size(c)
         for i in range(beg, end):
             c.execute(entities[i].insert_statement())
         self.__virtual_size += end - beg
-        from datatower_ai.src.util.logger import Logger
 
     def __get_insert_range(self, c: Cursor, entities_size: int,
                            cache_size: int, strategy: ExceedInsertionStrategy) -> (int, int):
@@ -236,14 +237,17 @@ class DTEventDao:
         #     return 0
         # return result
 
+        self.invalidate_virtual_size(None)
         # Uses virtual size instead of querying actual size (I/O) to saving time.
-        if self.__virtual_size < 0:
-            result = self.__read_func(self.__size)
+        return self.__virtual_size
+
+    def invalidate_virtual_size(self, c: Optional[Cursor] = None, force: bool = False):
+        if force or self.__virtual_size < 0:
+            result = self.__size(c) if c is not None else self.__read_func(self.__size)
             if result is None:
                 self.__virtual_size = 0
             else:
                 self.__virtual_size = max(0, result)
-        return self.__virtual_size
 
     @staticmethod
     def __size(c: Cursor):

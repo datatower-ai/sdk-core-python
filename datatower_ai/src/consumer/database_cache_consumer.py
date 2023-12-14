@@ -20,8 +20,8 @@ from datatower_ai import default_server_url
 
 
 class DatabaseCacheConsumer(AbstractConsumer):
-    def __init__(self, app_id, token, server_url=default_server_url,
-                 network_retries: int = 3, network_timeout: int = 30000, num_db_threads: int = 2,
+    def __init__(self, app_id, token, server_url=default_server_url, batch_size: int = 50,
+                 network_retries: int = 3, network_timeout: int = 3000, num_db_threads: int = 2,
                  num_network_threads: int = 2, thread_keep_alive_ms: int = -1,
                  cache_size: int = 5000,
                  exceed_insertion_strategy: ExceedInsertionStrategy = ExceedInsertionStrategy.DELETE):
@@ -33,6 +33,7 @@ class DatabaseCacheConsumer(AbstractConsumer):
         :param app_id: App id (DataTower.ai dashboard).
         :param token: Communication token (DataTower.ai dashboard).
         :param server_url: Server url (DataTower.ai dashboard).
+        :param batch_size: Size of each uploading batch.
         :param network_retries: Maximum of retries allowed for each uploading request.
         :param network_timeout: Allowed timeout in milliseconds of each uploading request.
         :param num_db_threads: Number of threads for Database operation (w/r).
@@ -46,16 +47,21 @@ class DatabaseCacheConsumer(AbstractConsumer):
         """
         network_timer = TimeMonitor().start("db_cache_network")
         self.__network_wm = WorkerManager("db_cache_network", max(1, num_network_threads), keep_alive_ms=thread_keep_alive_ms,
-                                          on_all_workers_stop=lambda: network_timer.stop(one_shot=False))
+                                          on_all_workers_stop=lambda: network_timer.pause(),
+                                          on_all_worker_revived=lambda: network_timer.resume(),
+                                          on_terminate=lambda: network_timer.stop(one_shot=False))
 
         database_timer = TimeMonitor().start("db_cache_database")
         self.__db_wm = WorkerManager("db_cache_database", max(1, num_db_threads), keep_alive_ms=thread_keep_alive_ms,
-                                     on_all_workers_stop=lambda: database_timer.stop(one_shot=False))
+                                     on_all_workers_stop=lambda: database_timer.pause(),
+                                     on_all_worker_revived=lambda: database_timer.resume(),
+                                     on_terminate=lambda: database_timer.stop(one_shot=False))
 
         self.__http_service = _HttpService(max(0, network_timeout), max(0, network_retries))
         self.__app_id = app_id
         self.__token = token
         self.__server_url = server_url
+        self.__batch_size = max(1, batch_size)
         self.__cache_size = cache_size
         self.__exceed_insertion_strategy = exceed_insertion_strategy
 
@@ -66,10 +72,11 @@ class DatabaseCacheConsumer(AbstractConsumer):
         self.__db_wm.execute(lambda: self.__insert_to_db(get_msg, self.__cache_size, self.__exceed_insertion_strategy))
 
     def flush(self):
-        self.__query_from_db()
+        self.__db_wm.execute(self.__query_from_db)
 
     def close(self):
-        self.__network_wm.terminate()
+        self.__db_wm.execute(self.__query_from_db)
+        self.__db_wm.execute(lambda: self.__network_wm.terminate())
         self.__db_wm.terminate()
 
     def __insert_to_db(self, get_data: Callable[[], List[str]], cache_size: int, strategy: ExceedInsertionStrategy):
@@ -85,7 +92,7 @@ class DatabaseCacheConsumer(AbstractConsumer):
         self.__db_wm.execute(self.__query_from_db)
 
     def __query_from_db(self):
-        self.__db_wm.execute(_QueryFromDbTask(self.__db_wm, self.__network_wm, self.__http_service))
+        self.__db_wm.execute(_QueryFromDbTask(self.__db_wm, self.__network_wm, self.__http_service, self.__batch_size))
 
     def __del__(self):
         Logger.log("="*80)
@@ -126,10 +133,11 @@ class _QueryFromDbTask(Task):
 
     __sem = Semaphore()
 
-    def __init__(self, db_wm, nw_wm, http_service):
+    def __init__(self, db_wm, nw_wm, http_service, batch_size):
         self.__db_wm = db_wm
         self.__nw_wm = nw_wm
         self.__http_service = http_service
+        self.__batch_size = max(1, batch_size)
 
     def run(self):
         _QueryFromDbTask.__sem.acquire()
@@ -152,13 +160,14 @@ class _QueryFromDbTask(Task):
             return
 
         num_queried = 0
-        n = 50
+        n = self.__batch_size
 
         while num_queried < length:
             entities = _QueryFromDbTask.query_entities(dao, n*2, 0)
 
             if len(entities) == 0:
                 Logger.log("[ReadFromDbAndUpload] entities is empty, length=%d, num_queried=%d, break" % (length, num_queried), logging.DEBUG)
+                dao.invalidate_virtual_size(force=True)       # length is unmatched with actual, needs to invalidate
                 break
 
             num_queried += len(entities)
@@ -178,7 +187,7 @@ class _QueryFromDbTask(Task):
                     ett = etts[i*n:(i+1)*n]
                     if len(ett) == 0:
                         continue
-                    self.__nw_wm.execute(_UploadTask(self.__http_service, etts[i*n:(i+1)*n], self.__after_upload))
+                    self.__nw_wm.execute(_UploadTask(self.__http_service, ett, self.__after_upload))
 
         self.__phase_end()
 
@@ -225,7 +234,7 @@ class _QueryFromDbTask(Task):
         _QueryFromDbTask.__sem.release()
 
         if not no_need_upload and has_pending:
-            self.__db_wm.execute(_QueryFromDbTask(self.__db_wm, self.__nw_wm, self.__http_service))
+            self.__db_wm.execute(_QueryFromDbTask(self.__db_wm, self.__nw_wm, self.__http_service, self.__batch_size))
 
 
 class _UploadTask(Task):
@@ -240,33 +249,38 @@ class _UploadTask(Task):
 
         is_success = False
 
+        app_id = self.__entities[0].app_id
+        server_url = self.__entities[0].server_url
+        token = self.__entities[0].token
+
+        data = '[' + ','.join(map(lambda x: x.data, self.__entities)) + ']'
+
+        timer = TimeMonitor().start("UploadFromDbTask-send")
         try:
-            app_id = self.__entities[0].app_id
-            server_url = self.__entities[0].server_url
-            token = self.__entities[0].token
-
-            data = '[' + ','.join(map(lambda x: x.data, self.__entities)) + ']'
-
-            timer = TimeMonitor().start("UploadFromDbTask-send")
-            try:
-                is_success = self.__http_service.post_event(
-                    app_id=app_id,
-                    server_url=server_url,
-                    token=token,
-                    data=data,
-                    length=str(len(self.__entities))
-                )
-            except:
-                Logger.exception("UploadFromDbTask#send")
-            finally:
-                timer.stop(one_shot=False)
-                CounterMonitor["UploadFromDbTask-send"] += len(self.__entities) if is_success else 0
-
-            if is_success:
-                Logger.log("[UploadTask] Uploaded {} events! ({}, {})".format(len(self.__entities), server_url, app_id), logging.DEBUG)
-            else:
-                Logger.log("[UploadTask] Upload failed for {} events! ({}, {})".format(len(self.__entities), server_url, app_id), logging.WARNING)
+            is_success = self.__http_service.post_event(
+                app_id=app_id,
+                server_url=server_url,
+                token=token,
+                data=data,
+                length=str(len(self.__entities))
+            )
         except:
-            Logger.log("[UploadTask] send failed!", logging.ERROR)
+            Logger.error("[UploadTask] send failed!")
         finally:
-            self.__after_upload(is_success, [(x.identifier,) for x in self.__entities])
+            timer.stop(one_shot=False)
+            CounterMonitor["UploadFromDbTask-send"] += len(self.__entities) if is_success else 0
+
+        if is_success:
+            Logger.log("[UploadTask] Uploaded {} events! ({}, {})".format(len(self.__entities), server_url, app_id), logging.DEBUG)
+        else:
+            Logger.log("[UploadTask] Upload failed for {} events! ({}, {})".format(len(self.__entities), server_url, app_id), logging.WARNING)
+
+        self.__after_upload(is_success, [(x.identifier,) for x in self.__entities])
+
+    def fallback(self, reason: Tuple[int, str]):
+        Logger.warning(
+            "[UploadTask] Task is not run, reason: \"{}\". This batch of data (length: {}) will be retained ".format(
+                reason[1], len(self.__entities)
+            )
+        )
+        self.__after_upload(False, [(x.identifier,) for x in self.__entities])

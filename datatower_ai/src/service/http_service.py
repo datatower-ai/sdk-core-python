@@ -1,6 +1,7 @@
 import gzip
 import json
 import logging
+import time
 from typing import Dict, Optional, Union
 try:
     from urllib.parse import urlparse
@@ -33,6 +34,7 @@ class _HttpService(object):
 
     指定接收端地址和项目 APP ID, 实现向接收端上传数据的接口. 发送前将数据默认使用 Gzip 压缩,
     """
+    _simulate = None
 
     def __init__(self, timeout=3000, retries: int = 3, compress=True):
         self.timeout = timeout
@@ -50,6 +52,13 @@ class _HttpService(object):
             DTIllegalDataException: 数据错误
             DTNetworkException: 网络错误
         """
+        if Logger.is_print and _HttpService._simulate is not None:
+            Logger.debug("[HttpService] Simulating the HttpService result -> {}, delay: {}ms".format(
+                _HttpService._simulate > 0, _HttpService._simulate
+            ))
+            time.sleep(_HttpService._simulate / 1000)
+            return _HttpService._simulate
+
         from datatower_ai.__version__ import __version__
         headers = {'app_id': app_id, 'DT-type': 'python-sdk', 'sdk-version': __version__,
                    'data-count': length, 'token': token}
@@ -84,6 +93,10 @@ class _HttpService(object):
             raise DTNetworkException("Http failed due to " + repr(e))
 
     def post_raw(self, url: str, data: Union[str, Dict], headers: Optional[Dict] = None) -> bool:
+        if Logger.is_print and _HttpService._simulate is not None:
+            Logger.info("[HttpService] Simulating the HttpService result -> {}".format(_HttpService._simulate))
+            return _HttpService._simulate
+
         try:
             with requests.Session() as s:
                 retry = Retry(total=self.retries, backoff_factor=0.3)

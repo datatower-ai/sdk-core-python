@@ -2,7 +2,7 @@ import logging
 import random
 import time
 from abc import ABC, abstractmethod
-from typing import Callable
+from typing import Callable, Tuple
 
 from datatower_ai.src.util.logger import Logger
 from future.types.newint import long
@@ -16,9 +16,18 @@ except ImportError:
 
 
 class Task(ABC):
+    REASON_WORKER_MANAGER_TERMINATED = (1, "Corresponding worker manager is terminated")
+
     @abstractmethod
     def run(self):
         pass
+
+    def fallback(self, reason: Tuple[int, str]):
+        pass
+
+    @staticmethod
+    def is_task(other):
+        return isinstance(other, Task)
 
 
 class _Overtime:
@@ -158,7 +167,7 @@ class Worker(Thread):
         # normal task
         try:
             # Logger.debug("%s get a task, doing...", self.__name)
-            if isinstance(task, Task):
+            if Task.is_task(task):
                 task.run()
             else:
                 task()
@@ -186,7 +195,9 @@ class WorkerManager:
                  size: int = 1,
                  keep_alive_ms: long = -1,
                  on_all_workers_stop: Callable = lambda: (),
-                 on_terminate: Callable = lambda: ()
+                 on_terminate: Callable = lambda: (),
+                 on_all_worker_revived: Callable = lambda: (),
+                 on_start: Callable = lambda: (),
                  ):
         """Creating a WorkerManager with fix number of workers
 
@@ -203,12 +214,15 @@ class WorkerManager:
         self.__queue = queue.PriorityQueue()
         self.__workers = []
         self.__terminated = False
+        self.__terminating = False
         self.__started = False
         self.__keep_alive_ms = keep_alive_ms
         self.__barrier = Event()
         self.__barrier.set()
         self.__on_terminate = on_terminate
         self.__on_all_workers_stop = on_all_workers_stop
+        self.__on_all_worker_revived = on_all_worker_revived
+        self.__on_start = on_start
 
     def __len__(self):
         return self.__size
@@ -234,17 +248,25 @@ class WorkerManager:
             worker.start()
         self.__started = True
         self.__terminated = False
+        self.__terminating = False
+        self.__on_start()
         Logger.log("[%s] is started" % self, logging.DEBUG)
 
     def __revive_all_workers(self):
         """Revive all stopped workers, work iff this WM is started"""
         if not self.__started:
             return
+        num_awake = 0
         for i in range(0, len(self.__workers)):
             if not self.__workers[i].is_alive():
                 self.__workers[i] = self.__create_worker(i)
                 self.__workers[i].start()
-                Logger.log("[%s] awaking stopped worker #%d" % (self, i), logging.DEBUG)
+                num_awake += 1
+                Logger.log("[%s] awaking stopped worker #%d, awakened: %d" % (self, i, num_awake), logging.DEBUG)
+
+        if num_awake == self.__size:
+            Logger.debug("[%s] Awakened all workers" % self)
+            self.__on_all_worker_revived()
 
     def execute(self, task, delay: int = 0) -> bool:
         """Dispatch the task to workers.
@@ -257,6 +279,8 @@ class WorkerManager:
         """
         if self.__terminated:
             Logger.log("[%s] received a task, but worker manager is terminated" % self, logging.DEBUG)
+            if Task.is_task(task):
+                task.fallback(Task.REASON_WORKER_MANAGER_TERMINATED)
             return False
 
         self.__revive_all_workers()
@@ -274,43 +298,51 @@ class WorkerManager:
 
     def terminate(self):
         """Terminate current WorkerManager and wait for all worker joined."""
-        Logger.log(
-            "TERMINATE {}, self.__started: {}, self.__terminated: {}".format(
-                self, self.__started, self.__terminated
+        Logger.debug(
+            "[WorkerManager] TERMINATE {}, self.__started: {}, self.__terminated: {}, self.__terminating: {}".format(
+                self, self.__started, self.__terminated, self.__terminating
             )
         )
-        if not self.__started or self.__terminated:
+        if not self.__started or self.__terminated or self.__terminating:
             return
+        self.__terminating = True
         Logger.log("[%s] terminating..." % self, logging.DEBUG)
 
-        for _ in range(len(self.__workers)+1):
-            self.__queue.put((float("inf"), _TERMINATE_SIG))  # puts to the very last
-
-        self.__condition.acquire()
-        self.__condition.notify_all()
-        self.__condition.release()
+        self.__terminate_workers()
 
         for i in range(0, self.__size):
             worker = self.__workers[i]
             if isinstance(worker, Worker) and worker.is_alive():
                 self.__workers[i].join()
-                Logger.log("JOINED {}, {}".format(self, i))
+                Logger.log("[WorkerManager] JOINED {}, {}".format(self, self.__workers[i].name))
 
         self.__terminated = True
+        self.__terminating = False
         self.__started = False
         self.__queue.queue.clear()
 
         self.__on_terminate()
         Logger.log("[%s] terminated!" % self, logging.DEBUG)
 
+    def __terminate_workers(self):
+        for _ in range(len(self.__workers)+1):
+            self.__queue.put((float("inf"), _TERMINATE_SIG))  # puts to the very last
+        self.__condition.acquire()
+        self.__condition.notify_all()
+        self.__condition.release()
+
     def __on_worker_terminate(self, idx):
+        Logger.debug("[WorkerManager] %s is terminating" % self.__workers[idx].name)
         has_alive = False
         for i in range(len(self.__workers)):
             if i != idx and self.__workers[i].is_alive():
                 has_alive = True
                 break
         if not has_alive:
+            Logger.debug("[%s] No other alive workers (%s)" % (self, self.__workers[idx].name))
             self.__on_all_workers_stop()
+            if self.__terminating:
+                self.__terminate_workers()
 
     def place_barrier(self):
         """Place the barrier to pause all workers.

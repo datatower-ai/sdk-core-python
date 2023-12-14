@@ -288,8 +288,8 @@ class DTAnalytics(object):
             properties = {}
 
         import datatower_ai.src.extra_verify as extra_verify
-        self.__movePresetProperties(extra_verify.meta, data, properties)
-        self.__movePresetProperties(extra_verify.meta, data, copy.deepcopy(meta))
+        extra_verify.move_meta(properties, data)
+        extra_verify.move_meta(meta, data, delete=False)
 
         if '#event_time' not in data:
             self.__buildData(data, '#event_time', int(time.time() * 1000))
@@ -325,12 +325,6 @@ class DTAnalytics(object):
     def __buildData(self, data, key, value):
         if value is not None:
             data[key] = value
-
-    def __movePresetProperties(self, keys, data, properties):
-        for key in keys:
-            if key in properties.keys():
-                data[key] = properties.get(key)
-                del (properties[key])
 
     @staticmethod
     def enable_log(isPrint=False):
