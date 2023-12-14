@@ -3,17 +3,14 @@
 from __future__ import unicode_literals
 import copy
 import datetime
-import gzip
 import json
-import os
 import re
-import threading
 import time
 import random
-from typing import Callable, List
+from typing import List, Dict
 
-from datatower_ai.src.service.http_service import _HttpService
-from datatower_ai.src.util.exception import DTIllegalDataException, DTMetaDataException, DTException, DTNetworkException
+from datatower_ai.src.bean.event import Event
+from datatower_ai.src.util.exception import DTIllegalDataException, DTMetaDataException
 
 from datatower_ai.src.util.logger import Logger
 import logging
@@ -247,6 +244,15 @@ class DTAnalytics(object):
         self.__add(dt_id=dt_id, acid=acid, send_type='track', event_name=event_name, properties_add=all_properties,
                    meta=meta)
 
+    def track_batch(self, *events: Event):
+        """ Track a batch of events
+
+        :param events: A list of events to track.
+        """
+        for event in events:
+            self._public_track_add(event.event_name, event.properties)
+        self.__add_batch("track", *events)
+
     def flush(self):
         """
         立即提交数据到相应的接收端
@@ -274,22 +280,41 @@ class DTAnalytics(object):
         return all_properties
 
     def __add(self, dt_id, acid, send_type, event_name=None, properties_add=None, meta=None):
-        if dt_id is None and acid is None:
+        self.__add_batch(
+            send_type,
+            Event(dt_id=dt_id, acid=acid, event_name=event_name, properties=properties_add, meta=meta)
+        )
+
+    def __add_batch(self, send_type: str, *events: Event):
+        batch = [self.__build_data_from_event(send_type, event) for event in events]
+
+        try:
+            Logger.log('collect data=(len: {}){}'.format(len(batch), batch))
+            self.__consumer.add(lambda: [
+                json.dumps(data, separators=(',', ':'), cls=DTDateTimeSerializer, allow_nan=False) for data in batch
+            ])
+        except TypeError as e:
+            raise DTIllegalDataException(e)
+        except ValueError:
+            raise DTIllegalDataException("Nan or Inf data are not allowed")
+
+    def __build_data_from_event(self, send_type: str, event: Event):
+        if event.dt_id is None and event.acid is None:
             raise DTMetaDataException("dt_id and acid must be set at least one")
-        if (dt_id is not None and not is_str(dt_id)) or (acid is not None and not is_str(acid)):
+        if (event.dt_id is not None and not is_str(event.dt_id)) or (event.acid is not None and not is_str(event.acid)):
             raise DTMetaDataException("dt_id and acid must be string type")
 
-        assert_properties(event_name, properties_add)
+        assert_properties(event.event_name, event.properties)
 
         data = {'#event_type': send_type}
-        if properties_add:
-            properties = copy.deepcopy(properties_add)
+        if event.properties:
+            properties = copy.deepcopy(event.properties)
         else:
             properties = {}
 
-        import datatower_ai.src.extra_verify as extra_verify
+        import datatower_ai.src.data.extra_verify as extra_verify
         extra_verify.move_meta(properties, data)
-        extra_verify.move_meta(meta, data, delete=False)
+        extra_verify.move_meta(event.meta, data, delete=False)
 
         if '#event_time' not in data:
             self.__buildData(data, '#event_time', int(time.time() * 1000))
@@ -299,28 +324,21 @@ class DTAnalytics(object):
         if '#event_syn' not in data:
             self.__buildData(data, '#event_syn', random_str(16))
 
-        if dt_id is None:
+        if event.dt_id is None:
             self.__buildData(data, '#dt_id', '0000000000000000000000000000000000000000')
         else:
-            self.__buildData(data, '#dt_id', dt_id)
+            self.__buildData(data, '#dt_id', event.dt_id)
 
         if self.debug:
             self.__buildData(data, '#debug', 'true')
 
         self.__buildData(data, '#app_id', self.__app_id)
-        self.__buildData(data, '#event_name', event_name)
-        self.__buildData(data, '#acid', acid)
+        self.__buildData(data, '#event_name', event.event_name)
+        self.__buildData(data, '#acid', event.acid)
         data['properties'] = properties
 
         extra_verify.extra_verify(data)
-
-        try:
-            Logger.log('collect data={}'.format(data))
-            self.__consumer.add(lambda: [json.dumps(data, separators=(',', ':'), cls=DTDateTimeSerializer, allow_nan=False)])
-        except TypeError as e:
-            raise DTIllegalDataException(e)
-        except ValueError:
-            raise DTIllegalDataException("Nan or Inf data are not allowed")
+        return data
 
     def __buildData(self, data, key, value):
         if value is not None:

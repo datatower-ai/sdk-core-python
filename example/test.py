@@ -49,9 +49,16 @@ if __name__ == "__main__":
         "order": "订单号xxx"  # 自定义内容
     }
     _HttpService._simulate = 10
+    n = 10000
     # 设置事件数据
-    for _ in range(100):
+    for _ in range(n):
         dt.track(dt_id="aaaa", acid='ddd$fff', event_name="purchase", properties=properties, meta=meta)
+
+    batch_size = 100
+    for _ in range(max(1, n//batch_size)):
+        dt.track_batch(
+            *[Event(dt_id="bbbb", event_name="purchase_2", properties=properties, meta=meta) for _ in range(batch_size)]
+        )
     # 立即发送数据
     dt.flush()
 
