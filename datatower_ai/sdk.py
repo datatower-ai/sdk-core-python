@@ -29,6 +29,7 @@ try:
 except NameError:
     def is_str(s):
         return isinstance(s, str)
+
 try:
     isinstance(1, long)
 

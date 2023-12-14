@@ -6,6 +6,7 @@ from typing import Callable, Any, Optional
 from datatower_ai.src.data.database.config_dao import DTConfigDao
 from datatower_ai.src.data.database.event_dao import DTEventDao
 from datatower_ai.src.util.logger import Logger
+from datatower_ai.src.util.performance.time_monitor import TimeMonitor
 from datatower_ai.src.util.singleton import Singleton
 from datatower_ai.src.util.thread.file_lock import FileLock
 from datatower_ai.src.util.thread.swmr_lock import SingleWriteMultiReadLock
@@ -15,7 +16,7 @@ DT Database version note:
 v1: 
     - Created events table and configs table
 """
-DT_DB_VERSION: int = 1
+DT_DB_VERSION = 1
 
 
 class _DTDatabase(Singleton):
@@ -106,7 +107,8 @@ class _DTDatabase(Singleton):
 
         Use this method to insert/update/delete data if using this Database in concurrent env.
         """
-        self.__db_file_lock.acquire()
+        with TimeMonitor().start_with("acquire_db_file_lock"):
+            self.__db_file_lock.acquire()
         self.__swmr_lock.acquire_write()
         try:
             cursor = self.__conn.cursor()
@@ -126,7 +128,8 @@ class _DTDatabase(Singleton):
 
         Use this method to query data if using this Database in concurrent env.
         """
-        self.__db_file_lock.acquire()
+        with TimeMonitor().start_with("acquire_db_file_lock"):
+            self.__db_file_lock.acquire()
         self.__swmr_lock.acquire_read()
         try:
             cursor = self.__conn.cursor()

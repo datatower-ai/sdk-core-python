@@ -8,7 +8,7 @@ from datatower_ai.src.util.logger import Logger
 from datatower_ai.src.util.singleton import Singleton
 
 
-class TmTimer:
+class TmTimer(object):
     def __init__(self,
                  key: Optional[str] = None,
                  record_func: Optional[Callable[[str, float], None]] = None
@@ -65,6 +65,20 @@ class TmTimer:
             return self.__total_time * 1000
 
 
+class ContextTmTimer(TmTimer):
+    def __init__(self, key: Optional[str] = None, record_func: Optional[Callable[[str, float], None]] = None,
+                 one_shot: bool = True):
+        super(ContextTmTimer, self).__init__(key=key, record_func=record_func)
+        self.__one_shot = one_shot
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop(one_shot=self.__one_shot)
+        return False
+
+
 class TimeMonitor(Singleton):
     """This monitor is used for tracking time performance in indices
     ```
@@ -87,6 +101,9 @@ class TimeMonitor(Singleton):
 
     def start(self, key: str) -> TmTimer:
         return TmTimer(key, self._record)
+
+    def start_with(self, key: str, one_shot: bool = False) -> ContextTmTimer:
+        return ContextTmTimer(key, self._record, one_shot)
 
     def _record(self, key: str, elapsed: float):
         is_get = TimeMonitor.__sem.acquire(timeout=0.01)

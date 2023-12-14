@@ -5,6 +5,7 @@ from typing import List, Tuple, Callable, Any, Optional
 from future.types.newint import long
 
 from datatower_ai.src.strategy.exceed_insertion_strategy import ExceedInsertionStrategy
+from datatower_ai.src.util.performance.time_monitor import TimeMonitor
 
 _table_name = "events"
 
@@ -212,7 +213,8 @@ class DTEventDao:
     def __query_batch_inner(c: Cursor, limit: int, offset: int):
         c.execute(DTEventEntity.query_batch_unquired_statement(limit, offset))
         result = c.fetchall()
-        c.executemany(DTEventEntity.set_queried_statement(True), map(lambda x: (x[0],), result))
+        with TimeMonitor().start_with("event_dao-set_queried"):
+            c.executemany(DTEventEntity.set_queried_statement(True), map(lambda x: (x[0],), result))
         return _from_query_result(result)
 
     def restore_to_unquired(self, ids: List[Tuple]):

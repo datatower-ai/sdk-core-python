@@ -64,6 +64,7 @@ class DatabaseCacheConsumer(AbstractConsumer):
         self.__batch_size = max(1, batch_size)
         self.__cache_size = cache_size
         self.__exceed_insertion_strategy = exceed_insertion_strategy
+        self.__timer = TimeMonitor().start("db_cache_consumer")
 
     def get_app_id(self):
         return self.__app_id
@@ -96,6 +97,9 @@ class DatabaseCacheConsumer(AbstractConsumer):
 
     def __del__(self):
         Logger.log("="*80)
+        Logger.log("[Statistics] db_cache_consumer time used: {:.2f}".format(
+            self.__timer.stop())
+        )
         Logger.log("[Statistics] db_cache_network time used: {:.2f}".format(
             TimeMonitor().get_sum("db_cache_network"))
         )
@@ -106,6 +110,9 @@ class DatabaseCacheConsumer(AbstractConsumer):
             TimeMonitor().get_sum("UploadFromDbTask-query"),
             TimeMonitor().get_avg("UploadFromDbTask-query"),
             CounterMonitor["UploadFromDbTask-query"]))
+        Logger.log("[Statistics] 'mark_queried' time used: {:.2f}, avg: {:.2f}".format(
+            TimeMonitor().get_sum("event_dao-set_queried"), TimeMonitor().get_avg("event_dao-set_queried"))
+        )
         Logger.log("[Statistics] 'Insert' time sum: {:.2f}, avg: {:.2f}, count: {}".format(
             TimeMonitor().get_sum("UploadFromDbTask-insert"),
             TimeMonitor().get_avg("UploadFromDbTask-insert"),
@@ -122,6 +129,9 @@ class DatabaseCacheConsumer(AbstractConsumer):
             TimeMonitor().get_sum("UploadFromDbTask-send"),
             TimeMonitor().get_avg("UploadFromDbTask-send"),
             CounterMonitor["UploadFromDbTask-send"]))
+        Logger.log("[Statistics] 'acquire_db_file_lock' time sum: {:.2f}, avg: {:.2f}".format(
+            TimeMonitor().get_sum("acquire_db_file_lock"), TimeMonitor().get_avg("acquire_db_file_lock")
+        ))
         Logger.log("[Statistics] total success: {}, total failed: {}".format(
             CounterMonitor["UploadFromDbTask-success"], CounterMonitor["UploadFromDbTask-fail"]))
         Logger.log("="*80)
