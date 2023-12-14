@@ -3,6 +3,9 @@ import json
 import logging
 import time
 from typing import Dict, Optional, Union
+
+from datatower_ai.sdk import is_str
+
 try:
     from urllib.parse import urlparse
 except ImportError:
@@ -52,17 +55,27 @@ class _HttpService(object):
             DTIllegalDataException: 数据错误
             DTNetworkException: 网络错误
         """
-        if Logger.is_print and _HttpService._simulate is not None:
-            Logger.debug("[HttpService] Simulating the HttpService result -> {}, delay: {}ms".format(
-                _HttpService._simulate > 0, _HttpService._simulate
-            ))
-            time.sleep(_HttpService._simulate / 1000)
-            return _HttpService._simulate
-
         from datatower_ai.__version__ import __version__
         headers = {'app_id': app_id, 'DT-type': 'python-sdk', 'sdk-version': __version__,
                    'data-count': length, 'token': token}
+
+        return self.__post(server_url, data, headers)
+
+    def post_raw(self, url: str, data: Union[str, Dict], headers: Optional[Dict] = None) -> bool:
         try:
+            return self.__post(url, data, headers)
+        except:
+            Logger.exception("[HttpService] post_raw")
+            return False
+
+    def __post(self, url: str, data: Union[str, Dict], headers: Optional[Dict] = None) -> bool:
+        if Logger.is_print and _HttpService._simulate is not None:
+            Logger.info("[HttpService] Simulating the HttpService result -> {}".format(_HttpService._simulate))
+            return _HttpService._simulate > 0
+
+        if headers is None:
+            headers = {}
+        if is_str(data):
             compress_type = 'gzip'
             if self.compress:
                 data = _gzip_string(data.encode("utf-8"))
@@ -70,32 +83,6 @@ class _HttpService(object):
                 compress_type = 'none'
                 data = data.encode("utf-8")
             headers['compress'] = compress_type
-
-            with requests.Session() as s:
-                retry = Retry(total=self.retries, backoff_factor=0.3)
-                s.mount("https://", HTTPAdapter(max_retries=retry))
-                response = s.post(urlparse(server_url).geturl(), data=data, headers=headers, timeout=self.timeout)
-
-                if response.status_code == 200:
-                    response_data = json.loads(response.text)
-                    Logger.log('response={}'.format(response_data), logging.DEBUG)
-                    if response_data["code"] == 0:
-                        return True
-                    else:
-                        raise DTIllegalDataException("Unexpected result code: " + str(response_data["code"]) \
-                                                     + " reason: " + response_data["msg"])
-                else:
-                    Logger.log('response={}'.format(response.status_code))
-                    raise DTNetworkException("Unexpected Http status code " + str(response.status_code))
-        except ConnectionError as e:
-            raise DTNetworkException("Data transmission failed due to " + repr(e))
-        except Exception as e:
-            raise DTNetworkException("Http failed due to " + repr(e))
-
-    def post_raw(self, url: str, data: Union[str, Dict], headers: Optional[Dict] = None) -> bool:
-        if Logger.is_print and _HttpService._simulate is not None:
-            Logger.info("[HttpService] Simulating the HttpService result -> {}".format(_HttpService._simulate))
-            return _HttpService._simulate
 
         try:
             with requests.Session() as s:
@@ -108,16 +95,12 @@ class _HttpService(object):
                     if response_data["code"] == 0:
                         return True
                     else:
-                        Logger.error(
-                            "[HttpService] post_raw: Unexpected result code: {}, reason: {}".format(
-                                response_data["code"], response_data["msg"]
-                            )
-                        )
+                        raise DTIllegalDataException("Unexpected result code: " + str(response_data["code"]) \
+                                                     + " reason: " + response_data["msg"])
                 else:
-                    Logger.error(
-                        "[HttpService] post_raw: Unexpected Http status code {}, {}".format(response.status_code, response)
-                    )
-            return False
-        except ConnectionError as _:
-            Logger.exception("[HttpService] post_raw: Data transmission failed")
-            return False
+                    Logger.log('response={}'.format(response.status_code))
+                    raise DTNetworkException("Unexpected Http status code " + str(response.status_code))
+        except ConnectionError as e:
+            raise DTNetworkException("Data transmission failed due to " + repr(e))
+        except Exception as e:
+            raise DTNetworkException("Http failed due to " + repr(e))
