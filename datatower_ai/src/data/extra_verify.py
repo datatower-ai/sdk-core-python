@@ -11,14 +11,24 @@ __COMPULSORY_META = ("#bundle_id",)
 __NAME_REGEX = re.compile(r"^[#$a-zA-Z][a-zA-Z0-9_]{0,63}$")
 
 __PRESET_PROPS_COMMON = ("$uid", "#dt_id", "#acid", "#event_syn", "#session_id", "#device_manufacturer", "#event_name", "#is_foreground", "#android_id", "#gaid", "#mcc", "#mnc", "#os_country_code", "#os_lang_code", "#event_time", "#bundle_id", "#app_version_code", "#app_version_name", "#sdk_type", "#sdk_version_name", "#os", "#os_version_name", "#os_version_code", "#device_brand", "#device_model", "#build_device", "#screen_height", "#screen_width", "#memory_used", "#storage_used", "#network_type", "#simulator", "#fps", "$ip", "$country_code", "$server_time")
-__PRESET_PROPS_AD = ("#ad_seq", "#ad_id", "#ad_type_code", "#ad_platform_code", "#ad_entrance", "#ad_result", "#ad_duration", "#ad_location", "#errorCode", "#errorMessage", "#ad_value", "#ad_currency", "#ad_precision", "#ad_country_code", "#ad_mediation_code", "#ad_mediation_id")
+__PRESET_PROPS_AD = ("#ad_seq", "#ad_id", "#ad_type_code", "#ad_platform_code", "#ad_entrance", "#ad_result", "#ad_duration", "#ad_location", "#errorCode", "#errorMessage", "#ad_value", "#ad_currency", "#ad_precision", "#ad_country_code", "#ad_mediation_code", "#ad_mediation_id", "#ad_conversion_source", "#ad_click_gap", "#ad_return_gap", "#error_code", "#error_message", "#load_result", "#load_duration")
 __PRESET_EVENT = {
     "#app_install": ("#referrer_url", "#referrer_click_time", "#app_install_time", "#instant_experience_launched", "#failed_reason", "#cnl"),
     "#session_start": ("#is_first_time", "#resume_from_background", "#start_reason"),
     "$app_install": ("$network_id", "$network_name", "$tracker_id", "$tracker_name", "$channel_id", "$channel_sub_id", "$channel_ssub_id", "$channel_name", "$channel_sub_name", "$channel_ssub_name", "$channel_platform_id", "$channel_platform_name", "$attribution_source", "$fraud_network_id", "$original_tracker_id", "$original_tracker_name", "$original_network_id", "$original_network_name"),
     "#session_end": ("#session_duration",),
+    "#ad_load_begin": __PRESET_PROPS_AD,
+    "#ad_load_end": __PRESET_PROPS_AD,
+    "#ad_to_show": __PRESET_PROPS_AD,
     "#ad_show": __PRESET_PROPS_AD,
+    "#ad_show_failed": __PRESET_PROPS_AD,
+    "#ad_close": __PRESET_PROPS_AD,
+    "#ad_click": __PRESET_PROPS_AD,
+    "#ad_left_app": __PRESET_PROPS_AD,
+    "#ad_return_app": __PRESET_PROPS_AD,
+    "#ad_rewarded": __PRESET_PROPS_AD,
     "#ad_conversion": __PRESET_PROPS_AD,
+    "#ad_paid": __PRESET_PROPS_AD,
     "#iap_purchase_success": ("#iap_order", "#iap_sku", "#iap_price", "#iap_currency", "$iap_price_exchange"),
     "#ias_subscribe_success": ("#ias_original_order", "#ias_order", "#ias_sku", "#ias_price", "#ias_currency", "$ias_price_exchange")
 }

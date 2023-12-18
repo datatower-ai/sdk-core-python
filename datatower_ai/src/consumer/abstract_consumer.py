@@ -1,7 +1,7 @@
 from typing import Callable, List
 
 
-class AbstractConsumer(object):
+class _AbstractConsumer(object):
     """
         Consumer抽象类
     """

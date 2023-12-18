@@ -2,75 +2,23 @@
 
 from __future__ import unicode_literals
 import copy
-import datetime
 import json
 import re
 import time
 import random
-from typing import List, Dict
 
+from datatower_ai import DTAdReport
+from datatower_ai.api.base import _DTApi
 from datatower_ai.src.bean.event import Event
+from datatower_ai.src.util.decoration import deprecated
 from datatower_ai.src.util.exception import DTIllegalDataException, DTMetaDataException
 
 from datatower_ai.src.util.logger import Logger
 import logging
 
+from datatower_ai.src.util.type_check import is_str
+
 default_server_url = "https://s2s.roiquery.com/sync"
-
-__NAME_PATTERN = re.compile(r"^[#$a-zA-Z][a-zA-Z0-9_]{0,63}$", re.I)
-_STR_LD = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-
-try:
-    isinstance("", basestring)
-
-
-    def is_str(s):
-        return isinstance(s, basestring)
-except NameError:
-    def is_str(s):
-        return isinstance(s, str)
-
-try:
-    isinstance(1, long)
-
-
-    def is_int(n):
-        return isinstance(n, int) or isinstance(n, long)
-except NameError:
-    def is_int(n):
-        return isinstance(n, int)
-
-
-def isNumber(s):
-    if is_int(s):
-        return True
-    if isinstance(s, float):
-        return True
-    return False
-
-
-def random_str(byte=32):
-    return ''.join(random.choice(_STR_LD) for i in range(byte))
-
-
-def assert_properties(event_name, properties):
-    if not __NAME_PATTERN.match(event_name):
-        raise DTIllegalDataException(
-            "Event_name must be a valid variable name.")
-    if properties is not None:
-        for key, value in properties.items():
-            if not is_str(key):
-                raise DTIllegalDataException("Property key must be a str. [key=%s]" % str(key))
-
-            if value is None:
-                continue
-
-            if not __NAME_PATTERN.match(key):
-                raise DTIllegalDataException(
-                    "Event_name=[%s] property key must be a valid variable name. [key=%s]" % (event_name, str(key)))
-
-            if '#user_add' == event_name.lower() and not isNumber(value):
-                raise DTIllegalDataException('User_add properties must be number type')
 
 
 class DynamicSuperPropertiesTracker():
@@ -78,22 +26,7 @@ class DynamicSuperPropertiesTracker():
         raise NotImplementedError
 
 
-class DTDateTimeSerializer(json.JSONEncoder):
-    """
-        实现 date 和 datetime 类型的自动转化
-        """
-
-    def default(self, obj):
-        if isinstance(obj, datetime.datetime):
-            head_fmt = "%Y-%m-%d %H:%M:%S"
-            return obj.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        elif isinstance(obj, datetime.date):
-            fmt = '%Y-%m-%d'
-            return obj.strftime(fmt)
-        return json.JSONEncoder.default(self, obj)
-
-
-class DTAnalytics(object):
+class DTAnalytics(object, _DTApi):
     """
     DTAnalytics 上报数据关键实例
     """
@@ -109,8 +42,7 @@ class DTAnalytics(object):
         Args:
             consumer: 指定的 Consumer
         """
-
-        self.__consumer = consumer
+        super(DTAnalytics, self).__init__(consumer, debug)
         self.__super_properties = {}
         self.__dynamic_super_properties_tracker = None
         self.__app_id = consumer.get_app_id()
@@ -120,8 +52,13 @@ class DTAnalytics(object):
             '#sdk_type': 'dt_python_sdk',
             '#sdk_version_name': __version__,
         }
-        self.debug = debug
         Logger.set(self.debug, log_level)
+
+        self.__ad = DTAdReport(self.consumer, debug)
+
+    @property
+    def ad(self) -> DTAdReport:
+        return self.__ad
 
     def set_dynamic_super_properties_tracker(self, dynamic_super_properties_tracker):
         self.__dynamic_super_properties_tracker = dynamic_super_properties_tracker
@@ -245,6 +182,26 @@ class DTAnalytics(object):
         self.__add(dt_id=dt_id, acid=acid, send_type='track', event_name=event_name, properties_add=all_properties,
                    meta=meta)
 
+    @deprecated("This function is deprecated, please use track() instead.")
+    def track_first(self, dt_id=None, acid=None, event_name='#app_install', properties=None):
+        """
+        发送安装事件数据
+
+        您可以调用 track_first 来上传首次事件，建议您根据先前梳理的文档来设置事件的属性以及发送信息的条件. 事件的属性是一个 dict 对象，其中每个元素代表一个属性.
+        首次事件是指针对某个设备或者其他维度的 ID，只会记录一次的事件. 例如在一些场景下，您可能希望记录在某个设备上第一次发生的事件，则可以用首次事件来上报数据.
+        Args:
+            dt_id: 访客 ID
+            acid: 账户 ID
+            event_name: 事件名称
+            properties: 事件属性
+
+        Raises:
+            DTIllegalDataException: 数据格式错误时会抛出此异常
+        """
+        all_properties = self._public_track_add(event_name, properties)
+        self.__add(dt_id=dt_id, acid=acid, send_type='track', event_name=event_name,
+                   properties_add=all_properties)
+
     def track_batch(self, *events: Event):
         """ Track a batch of events
 
@@ -280,70 +237,23 @@ class DTAnalytics(object):
             all_properties.update(properties)
         return all_properties
 
-    def __add(self, dt_id, acid, send_type, event_name=None, properties_add=None, meta=None):
-        self.__add_batch(
-            send_type,
-            Event(dt_id=dt_id, acid=acid, event_name=event_name, properties=properties_add, meta=meta)
-        )
+    def clear_super_properties(self):
+        """
+        删除所有已设置的事件公共属性
+        """
+        self.__super_properties = self.__preset_properties.copy()
 
-    def __add_batch(self, send_type: str, *events: Event):
-        batch = [self.__build_data_from_event(send_type, event) for event in events]
+    def set_super_properties(self, super_properties):
+        """
+        设置公共事件属性
 
-        try:
-            Logger.log('collect data=(len: {}){}'.format(len(batch), batch))
-            self.__consumer.add(lambda: [
-                json.dumps(data, separators=(',', ':'), cls=DTDateTimeSerializer, allow_nan=False) for data in batch
-            ])
-        except TypeError as e:
-            raise DTIllegalDataException(e)
-        except ValueError:
-            raise DTIllegalDataException("Nan or Inf data are not allowed")
+        公共事件属性是所有事件中的属性属性，建议您在发送事件前，先设置公共事件属性. 当 track 的 properties 和
+        super properties 有相同的 key 时，track 的 properties 会覆盖公共事件属性的值.
 
-    def __build_data_from_event(self, send_type: str, event: Event):
-        if event.dt_id is None and event.acid is None:
-            raise DTMetaDataException("dt_id and acid must be set at least one")
-        if (event.dt_id is not None and not is_str(event.dt_id)) or (event.acid is not None and not is_str(event.acid)):
-            raise DTMetaDataException("dt_id and acid must be string type")
-
-        assert_properties(event.event_name, event.properties)
-
-        data = {'#event_type': send_type}
-        if event.properties:
-            properties = copy.deepcopy(event.properties)
-        else:
-            properties = {}
-
-        import datatower_ai.src.data.extra_verify as extra_verify
-        extra_verify.move_meta(properties, data)
-        extra_verify.move_meta(event.meta, data, delete=False)
-
-        if '#event_time' not in data:
-            self.__buildData(data, '#event_time', int(time.time() * 1000))
-        if not is_int(data.get('#event_time')) or len(str(data.get('#event_time'))) != 13:
-            raise DTMetaDataException("event_time must be timestamp (ms)")
-
-        if '#event_syn' not in data:
-            self.__buildData(data, '#event_syn', random_str(16))
-
-        if event.dt_id is None:
-            self.__buildData(data, '#dt_id', '0000000000000000000000000000000000000000')
-        else:
-            self.__buildData(data, '#dt_id', event.dt_id)
-
-        if self.debug:
-            self.__buildData(data, '#debug', 'true')
-
-        self.__buildData(data, '#app_id', self.__app_id)
-        self.__buildData(data, '#event_name', event.event_name)
-        self.__buildData(data, '#acid', event.acid)
-        data['properties'] = properties
-
-        extra_verify.extra_verify(data)
-        return data
-
-    def __buildData(self, data, key, value):
-        if value is not None:
-            data[key] = value
+        Args:
+            super_properties 公共属性
+        """
+        self.__super_properties.update(super_properties)
 
     @staticmethod
     def enable_log(isPrint=False):

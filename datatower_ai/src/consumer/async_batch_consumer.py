@@ -15,12 +15,12 @@ from datatower_ai.src.util.logger import Logger
 from datatower_ai.src.util.exception import DTNetworkException, DTIllegalDataException
 
 from datatower_ai import default_server_url
-from datatower_ai.src.consumer.abstract_consumer import AbstractConsumer
+from datatower_ai.src.consumer.abstract_consumer import _AbstractConsumer
 from datatower_ai.src.service.http_service import _HttpService
 from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor
 
 
-class AsyncBatchConsumer(AbstractConsumer):
+class AsyncBatchConsumer(_AbstractConsumer):
     """
     异步、批量地向 DT 服务器发送数据
 
