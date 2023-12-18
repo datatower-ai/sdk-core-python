@@ -37,6 +37,8 @@ if __name__ == "__main__":
         "#bundle_id": "com.example.example",
     }
 
+    dt.utils.track_timer_start("track_timer_event", dt_id="aaaa")
+
     properties = {
         "#event_time": 1669022011679,
         # 选填，设置这条event发生的时间戳，13位，精确到毫秒，如果不设置的话，则默认是当前时间，建议加上
@@ -73,9 +75,14 @@ if __name__ == "__main__":
     dt.flush()
 
 
+    dt.utils.track_timer_pause("track_timer_event", dt_id="aaaa")
+
     dt.ad.report_show(ad_id="adadid", ad_type=AdType.BANNER, platform=AdPlatform.LOVINJOYADS, location="x",
                       seq="voapnv2va", entrance="x", mediation=AdMediation.MAX, mediation_id="id_xxx", dt_id="aaaa",
                       meta=meta)
+
+    dt.utils.track_timer_resume("track_timer_event", dt_id="aaaa")
+    dt.utils.track_timer_stop("track_timer_event", dt_id="aaaa", meta=meta)
     dt.flush()
 
 

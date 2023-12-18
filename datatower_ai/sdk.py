@@ -4,6 +4,7 @@ from __future__ import unicode_literals
 
 from datatower_ai.api.base import _DTApi
 from datatower_ai.api import DTAdReport
+from datatower_ai.api import DTAnalyticsUtils
 from datatower_ai.src.bean.event import Event
 from datatower_ai.src.util.decoration import deprecated
 from datatower_ai.src.util.exception import DTIllegalDataException, DTMetaDataException
@@ -36,6 +37,7 @@ class DTAnalytics(_DTApi):
             consumer: 指定的 Consumer
         """
         super(DTAnalytics, self).__init__(consumer, debug)
+        self.__consumer = consumer
         self.__super_properties = {}
         self.__dynamic_super_properties_tracker = None
         self.__app_id = consumer.get_app_id()
@@ -48,10 +50,15 @@ class DTAnalytics(_DTApi):
         Logger.set(debug, log_level)
 
         self.__ad = DTAdReport(consumer, debug)
+        self.__analytics_utils = DTAnalyticsUtils(consumer, debug)
 
     @property
     def ad(self) -> DTAdReport:
         return self.__ad
+
+    @property
+    def utils(self) -> DTAnalyticsUtils:
+        return self.__analytics_utils
 
     def set_dynamic_super_properties_tracker(self, dynamic_super_properties_tracker):
         self.__dynamic_super_properties_tracker = dynamic_super_properties_tracker
@@ -237,3 +244,17 @@ class DTAnalytics(_DTApi):
     @staticmethod
     def enable_log(isPrint=False):
         Logger.is_print = isPrint
+
+    def flush(self):
+        """
+        立即提交数据到相应的接收端
+        """
+        self.__consumer.flush()
+
+    def close(self):
+        """
+        关闭并退出 sdk
+
+        请在退出前调用本接口，以避免缓存内的数据丢失
+        """
+        self.__consumer.close()
