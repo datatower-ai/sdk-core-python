@@ -1,4 +1,5 @@
 import logging
+from collections import deque
 
 from datatower_ai.src.util.performance.time_monitor import TimeMonitor
 
@@ -7,7 +8,7 @@ try:
 except ImportError:
     import Queue as queue
 import threading
-from typing import List
+from typing import List, Deque
 
 from datatower_ai.src.util.logger import Logger
 
@@ -16,7 +17,7 @@ from datatower_ai.src.util.exception import DTNetworkException, DTIllegalDataExc
 from datatower_ai import default_server_url
 from datatower_ai.src.consumer.abstract_consumer import AbstractConsumer
 from datatower_ai.src.service.http_service import _HttpService
-from datatower_ai.src.util.performance.counter_monitor import CounterMonitor
+from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor
 
 
 class AsyncBatchConsumer(AbstractConsumer):
@@ -44,7 +45,7 @@ class AsyncBatchConsumer(AbstractConsumer):
         self.__token = token
         self.__server_url = server_url
 
-        self.__http_service = _HttpService(30000)
+        self.__http_service = _HttpService(30000, retries=3)
         self.__batch = max(1, flush_size)
         self.__queue = queue.Queue(max(1, queue_size))
 
@@ -53,8 +54,9 @@ class AsyncBatchConsumer(AbstractConsumer):
         self.__flushing_thread.daemon = True
         self.__flushing_thread.start()
         self.__app_id = app_id
-        self.__flush_buffer = []
+        self.__flush_buffer = deque()
         self.__close_retry = close_retry
+        self.__sem = threading.Semaphore()
 
     def get_app_id(self):
         return self.__app_id
@@ -66,7 +68,7 @@ class AsyncBatchConsumer(AbstractConsumer):
         try:
             for msg in msgs:
                 self.__queue.put_nowait(msg)
-            CounterMonitor["async_batch-insert"] += len(msgs)
+            _CounterMonitor["async_batch-insert"] += len(msgs)
         except queue.Full as e:
             raise DTNetworkException(e)
 
@@ -109,33 +111,46 @@ class AsyncBatchConsumer(AbstractConsumer):
 
         仅用于内部调用, 用户不应当调用此方法.
         """
-        while len(self.__flush_buffer) < self.__batch:
+        with self.__sem:
+            length = len(self.__flush_buffer)
+
+        while length < self.__batch:
             try:
-                self.__flush_buffer.append(str(self.__queue.get_nowait()))
+                with self.__sem:
+                    self.__flush_buffer.append(str(self.__queue.get_nowait()))
+                    length = len(self.__flush_buffer)
             except queue.Empty:
                 break
 
-        if len(self.__flush_buffer) > 0:
-            for i in range(3):  # 网络异常情况下重试 3 次
+        if length > 0:
+            with self.__sem:
+                # split this batch of data to approx 1mb size group.
+                splits = _HttpService.approx_split_data_by_mb(self.__flush_buffer)
+                self.__flush_buffer = deque()
+
+            for split in splits:
+                success = False
                 timer = TimeMonitor().start("async_batch-upload")
                 try:
-                    self.__http_service.post_event(
-                        self.__server_url, self.__app_id, self.__token,
-                        '[' + ','.join(self.__flush_buffer) + ']', str(len(self.__flush_buffer))
+                    Logger.warning("len: {}, split: {}".format(len(split), split))
+                    success = self.__http_service.post_event(
+                        self.__server_url, self.__app_id, self.__token, '[' + ','.join(split) + ']', str(len(split))
                     )
-                    timer.stop(one_shot=False)
-                    CounterMonitor["async_batch-upload_success"] += len(self.__flush_buffer)
-                    self.__flush_buffer.clear()
-                    return True
                 except DTNetworkException as e:
-                    timer.stop(one_shot=False)
-                    Logger.log("{}: {}".format(e, self.__flush_buffer), level=logging.WARNING)
-                    continue
+                    Logger.log("{}: {}".format(e, split), level=logging.WARNING)
                 except DTIllegalDataException as e:
+                    Logger.log("{}: {}".format(e, split), level=logging.WARNING)
+                finally:
                     timer.stop(one_shot=False)
-                    Logger.log("{}: {}".format(e, self.__flush_buffer), level=logging.WARNING)
-                    break
-            Logger.log("{}: {}".format("Data translate failed 3 times", self.__flush_buffer), level=logging.ERROR)
+
+                if success:
+                    with self.__sem:
+                        _CounterMonitor["async_batch-upload_success"] += len(split)
+                else:
+                    Logger.warning("Failed to upload events ({})".format(len(split)))
+                    with self.__sem:
+                        for item in split:
+                            self.__flush_buffer.appendleft(item)
 
     def __del__(self):
         tm = TimeMonitor()
@@ -143,8 +158,8 @@ class AsyncBatchConsumer(AbstractConsumer):
         Logger.log("[Statistics] 'upload' time used sum: {}, avg: {}".format(
             tm.get_sum("async_batch-upload"), tm.get_avg("async_batch-upload")
         ))
-        Logger.log("[Statistics] 'track' count: {}".format(CounterMonitor["async_batch-insert"]))
-        Logger.log("[Statistics] 'uploaded' count: {}".format(CounterMonitor["async_batch-upload_success"]))
+        Logger.log("[Statistics] 'track' count: {}".format(_CounterMonitor["async_batch-insert"]))
+        Logger.log("[Statistics] 'uploaded' count: {}".format(_CounterMonitor["async_batch-upload_success"]))
         Logger.log("="*80)
 
     class _AsyncFlushThread(threading.Thread):
