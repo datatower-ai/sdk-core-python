@@ -1,6 +1,6 @@
 import logging
 from threading import Semaphore
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, List, Tuple
 
 from datatower_ai.src.consumer.abstract_consumer import _AbstractConsumer
 from datatower_ai.src.data.database.dt_database import _DTDatabase
@@ -16,11 +16,9 @@ from datatower_ai.src.util.thread.thread import WorkerManager, Task
 
 from datatower_ai.src.util.performance.time_monitor import TimeMonitor
 
-from datatower_ai import default_server_url
-
 
 class DatabaseCacheConsumer(_AbstractConsumer):
-    def __init__(self, app_id, token, server_url=default_server_url, batch_size: int = 50,
+    def __init__(self, app_id, token, server_url=_HttpService.DEFAULT_SERVER_URL, batch_size: int = 50,
                  network_retries: int = 3, network_timeout: int = 3000, num_db_threads: int = 2,
                  num_network_threads: int = 2, thread_keep_alive_ms: int = -1,
                  cache_size: int = 5000,

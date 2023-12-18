@@ -1,4 +1,4 @@
-from datatower_ai.sdk import *
+from datatower_ai.sdk import DTAnalytics
 from datatower_ai.api import *
 from datatower_ai.src.bean.event import Event
 from datatower_ai.src.consumer.async_batch_consumer import AsyncBatchConsumer

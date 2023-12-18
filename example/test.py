@@ -48,7 +48,7 @@ if __name__ == "__main__":
         "price": 15,  # 自定义内容
         "order": "订单号xxx"  # 自定义内容
     }
-    _HttpService._simulate = -1
+    _HttpService._simulate = 10
     n = 10000
     # 设置事件数据
     for _ in range(n):
@@ -70,6 +70,12 @@ if __name__ == "__main__":
     # 设置用户属性
     dt.user_set(dt_id="aaaa", acid='ddd$fff', properties=user_properties, meta=meta)
     # 立即发送数据
+    dt.flush()
+
+
+    dt.ad.report_show(ad_id="adadid", ad_type=AdType.BANNER, platform=AdPlatform.LOVINJOYADS, location="x",
+                      seq="voapnv2va", entrance="x", mediation=AdMediation.MAX, mediation_id="id_xxx", dt_id="aaaa",
+                      meta=meta)
     dt.flush()
 
 

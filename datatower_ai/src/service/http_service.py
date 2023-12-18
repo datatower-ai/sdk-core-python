@@ -4,8 +4,8 @@ from typing import Dict, Optional, Union, List, Callable, Any, Deque
 
 from urllib3.exceptions import MaxRetryError
 
-from datatower_ai.sdk import is_str
 from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor
+from datatower_ai.src.util.type_check import is_str
 
 try:
     from urllib.parse import urlparse
@@ -39,6 +39,7 @@ class _HttpService(object):
     指定接收端地址和项目 APP ID, 实现向接收端上传数据的接口. 发送前将数据默认使用 Gzip 压缩,
     """
     _simulate = None
+    DEFAULT_SERVER_URL = "https://s2s.roiquery.com/sync"
 
     def __init__(self, timeout=3000, retries: int = 3, compress=True):
         self.timeout = timeout

@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Union, List, Dict
+from typing import Union, Dict
 
 from datatower_ai.api.base import _DTApi
 from datatower_ai.src.consumer.abstract_consumer import _AbstractConsumer
@@ -113,7 +113,7 @@ class DTAdReport(_DTApi):
         argument can be ignored if metas is already putted inside properties.
         """
         props = self.__update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id)
-        self.__add(dt_id, acid, "track", "#ad_load_begin", props, meta)
+        self._add(dt_id, acid, "track", "#ad_load_begin", props, meta)
 
     def report_load_end(
             self,
@@ -157,7 +157,7 @@ class DTAdReport(_DTApi):
             "#error_code": error_code,
             "#error_message": error_message
         })
-        self.__add(dt_id, acid, "track", "#ad_load_end", props, meta)
+        self._add(dt_id, acid, "track", "#ad_load_end", props, meta)
 
     def report_to_show(
             self,
@@ -193,7 +193,7 @@ class DTAdReport(_DTApi):
         """
         props = self.__update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id,
                                          location, entrance)
-        self.__add(dt_id, acid, "track", "#ad_to_show", props, meta)
+        self._add(dt_id, acid, "track", "#ad_to_show", props, meta)
 
     def report_show(
             self,
@@ -229,7 +229,7 @@ class DTAdReport(_DTApi):
         """
         props = self.__update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id,
                                          location, entrance)
-        self.__add(dt_id, acid, "track", "#ad_show", props, meta)
+        self._add(dt_id, acid, "track", "#ad_show", props, meta)
 
     def report_show_failed(
             self,
@@ -269,7 +269,7 @@ class DTAdReport(_DTApi):
         """
         props = self.__update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id,location,
                                          entrance, {"#error_code": error_code, "#error_message": error_message})
-        self.__add(dt_id, acid, "track", "#ad_show_failed", props, meta)
+        self._add(dt_id, acid, "track", "#ad_show_failed", props, meta)
 
     def report_close(
             self,
@@ -305,7 +305,7 @@ class DTAdReport(_DTApi):
         """
         props = self.__update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id,
                                          location, entrance)
-        self.__add(dt_id, acid, "track", "#ad_close", props, meta)
+        self._add(dt_id, acid, "track", "#ad_close", props, meta)
 
     def report_click(
             self,
@@ -341,7 +341,7 @@ class DTAdReport(_DTApi):
         """
         props = self.__update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id,
                                          location, entrance)
-        self.__add(dt_id, acid, "track", "#ad_click", props, meta)
+        self._add(dt_id, acid, "track", "#ad_click", props, meta)
 
     def report_rewarded(
             self,
@@ -377,7 +377,7 @@ class DTAdReport(_DTApi):
         """
         props = self.__update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id,
                                          location, entrance)
-        self.__add(dt_id, acid, "track", "#ad_rewarded", props, meta)
+        self._add(dt_id, acid, "track", "#ad_rewarded", props, meta)
 
     def report_conversion_by_click(
             self,
@@ -413,7 +413,7 @@ class DTAdReport(_DTApi):
         """
         props = self.__update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id,
                                          location, entrance, {"#ad_conversion_source": "by_click"})
-        self.__add(dt_id, acid, "track", "#ad_conversion", props, meta)
+        self._add(dt_id, acid, "track", "#ad_conversion", props, meta)
 
     def report_conversion_by_left_app(
             self,
@@ -449,7 +449,7 @@ class DTAdReport(_DTApi):
         """
         props = self.__update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id,
                                          location, entrance, {"#ad_conversion_source": "by_left_app"})
-        self.__add(dt_id, acid, "track", "#ad_conversion", props, meta)
+        self._add(dt_id, acid, "track", "#ad_conversion", props, meta)
 
     def report_conversion_by_rewarded(
             self,
@@ -485,7 +485,7 @@ class DTAdReport(_DTApi):
         """
         props = self.__update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id,
                                          location, entrance, {"#ad_conversion_source": "by_rewarded"})
-        self.__add(dt_id, acid, "track", "#ad_conversion", props, meta)
+        self._add(dt_id, acid, "track", "#ad_conversion", props, meta)
 
     def report_paid(
             self,
@@ -524,7 +524,7 @@ class DTAdReport(_DTApi):
         props = self.__update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id, others={
             "#ad_value": value, "#ad_currency": currency, "#ad_precision": precision
         })
-        self.__add(dt_id, acid, "track", "#ad_paid", props, meta)
+        self._add(dt_id, acid, "track", "#ad_paid", props, meta)
 
     def report_paid_by_country(
             self,
@@ -563,7 +563,7 @@ class DTAdReport(_DTApi):
         props = self.__update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id, others={
             "#ad_value": value, "#ad_precision": precision, "#ad_country_code": country
         })
-        self.__add(dt_id, acid, "track", "#ad_paid", props, meta)
+        self._add(dt_id, acid, "track", "#ad_paid", props, meta)
 
     def report_left_app(
             self,
@@ -599,7 +599,7 @@ class DTAdReport(_DTApi):
         """
         props = self.__update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id,
                                          location, entrance)
-        self.__add(dt_id, acid, "track", "#ad_left_app", props, meta)
+        self._add(dt_id, acid, "track", "#ad_left_app", props, meta)
 
     @staticmethod
     def __update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id,
@@ -610,7 +610,7 @@ class DTAdReport(_DTApi):
             "#ad_type_code": _get_value(ad_type),
             "#ad_platform_code": _get_value(platform),
             "#ad_seq": seq,
-            "#ad_mediation_code": mediation,
+            "#ad_mediation_code": _get_value(mediation),
             "#ad_mediation_id": mediation_id,
             "#ad_location": location,
             "#ad_entrance": entrance,

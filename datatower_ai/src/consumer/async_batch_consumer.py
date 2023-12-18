@@ -8,13 +8,12 @@ try:
 except ImportError:
     import Queue as queue
 import threading
-from typing import List, Deque
+from typing import List
 
 from datatower_ai.src.util.logger import Logger
 
 from datatower_ai.src.util.exception import DTNetworkException, DTIllegalDataException
 
-from datatower_ai import default_server_url
 from datatower_ai.src.consumer.abstract_consumer import _AbstractConsumer
 from datatower_ai.src.service.http_service import _HttpService
 from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor
@@ -29,8 +28,8 @@ class AsyncBatchConsumer(_AbstractConsumer):
     2. 数据发送间隔超过预定义的最大时间, 默认为 3 秒
     """
 
-    def __init__(self, app_id, token, server_url=default_server_url, interval=3, flush_size=20, queue_size=100000,
-                 close_retry=1):
+    def __init__(self, app_id, token, server_url=_HttpService.DEFAULT_SERVER_URL, interval=3, flush_size=20,
+                 queue_size=100000, close_retry=1):
         """
         创建 AsyncBatchConsumer
 

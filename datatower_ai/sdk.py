@@ -1,14 +1,9 @@
 # encoding:utf-8
 
 from __future__ import unicode_literals
-import copy
-import json
-import re
-import time
-import random
 
-from datatower_ai import DTAdReport
 from datatower_ai.api.base import _DTApi
+from datatower_ai.api import DTAdReport
 from datatower_ai.src.bean.event import Event
 from datatower_ai.src.util.decoration import deprecated
 from datatower_ai.src.util.exception import DTIllegalDataException, DTMetaDataException
@@ -18,15 +13,13 @@ import logging
 
 from datatower_ai.src.util.type_check import is_str
 
-default_server_url = "https://s2s.roiquery.com/sync"
-
 
 class DynamicSuperPropertiesTracker():
     def get_dynamic_super_properties(self):
         raise NotImplementedError
 
 
-class DTAnalytics(object, _DTApi):
+class DTAnalytics(_DTApi):
     """
     DTAnalytics 上报数据关键实例
     """
@@ -52,9 +45,9 @@ class DTAnalytics(object, _DTApi):
             '#sdk_type': 'dt_python_sdk',
             '#sdk_version_name': __version__,
         }
-        Logger.set(self.debug, log_level)
+        Logger.set(debug, log_level)
 
-        self.__ad = DTAdReport(self.consumer, debug)
+        self.__ad = DTAdReport(consumer, debug)
 
     @property
     def ad(self) -> DTAdReport:
@@ -76,8 +69,8 @@ class DTAnalytics(object, _DTApi):
             properties: dict 类型的用户属性
             meta: Dict[str, Any], properties 之外以带 #、$ 开头的属性
         """
-        self.__add(dt_id=dt_id, acid=acid, event_name='#user_set', send_type='user',
-                   properties_add=properties, meta=meta)
+        self._add(dt_id=dt_id, acid=acid, event_name='#user_set', send_type='user',
+                  properties_add=properties, meta=meta)
 
     def user_unset(self, dt_id=None, acid=None, properties=None, meta=None):
         """
@@ -91,8 +84,8 @@ class DTAnalytics(object, _DTApi):
         """
         if isinstance(properties, list):
             properties = dict((key, 0) for key in properties)
-        self.__add(dt_id=dt_id, acid=acid, event_name='#user_unset', send_type='user',
-                   properties_add=properties, meta=meta)
+        self._add(dt_id=dt_id, acid=acid, event_name='#user_unset', send_type='user',
+                  properties_add=properties, meta=meta)
 
     def user_set_once(self, dt_id=None, acid=None, properties=None, meta=None):
         """
@@ -106,8 +99,8 @@ class DTAnalytics(object, _DTApi):
             properties: dict 类型的用户属性
             meta: Dict[str, Any], properties 之外以带 #、$ 开头的属性
         """
-        self.__add(dt_id=dt_id, acid=acid, event_name='#user_set_once', send_type='user',
-                   properties_add=properties, meta=meta)
+        self._add(dt_id=dt_id, acid=acid, event_name='#user_set_once', send_type='user',
+                  properties_add=properties, meta=meta)
 
     def user_add(self, dt_id=None, acid=None, properties=None, meta=None):
         """
@@ -122,8 +115,8 @@ class DTAnalytics(object, _DTApi):
             properties: Dict[str, int|float|double]
             meta: Dict[str, Any], properties 之外以带 #、$ 开头的属性
         """
-        self.__add(dt_id=dt_id, acid=acid, event_name='#user_add', send_type='user',
-                   properties_add=properties, meta=meta)
+        self._add(dt_id=dt_id, acid=acid, event_name='#user_add', send_type='user',
+                  properties_add=properties, meta=meta)
 
     def user_append(self, dt_id=None, acid=None, properties=None, meta=None):
         """
@@ -140,8 +133,8 @@ class DTAnalytics(object, _DTApi):
                 raise DTIllegalDataException('#user_append properties must be list type')
             properties[key] = [str(i) for i in value]
 
-        self.__add(dt_id=dt_id, acid=acid, event_name='#user_append', send_type='user',
-                   properties_add=properties, meta=meta)
+        self._add(dt_id=dt_id, acid=acid, event_name='#user_append', send_type='user',
+                  properties_add=properties, meta=meta)
 
     def user_uniq_append(self, dt_id=None, acid=None, properties=None, meta=None):
         """
@@ -158,8 +151,8 @@ class DTAnalytics(object, _DTApi):
                 raise DTIllegalDataException('#user_uniq_append properties must be list type')
             properties[key] = [str(i) for i in value]
 
-        self.__add(dt_id=dt_id, acid=acid, event_name='#user_uniq_append', send_type='user',
-                   properties_add=properties, meta=meta)
+        self._add(dt_id=dt_id, acid=acid, event_name='#user_uniq_append', send_type='user',
+                  properties_add=properties, meta=meta)
 
     def track(self, dt_id=None, acid=None, event_name=None, properties=None, meta=None):
         """
@@ -179,8 +172,8 @@ class DTAnalytics(object, _DTApi):
             DTIllegalDataException: 数据格式错误时会抛出此异常
         """
         all_properties = self._public_track_add(event_name, properties)
-        self.__add(dt_id=dt_id, acid=acid, send_type='track', event_name=event_name, properties_add=all_properties,
-                   meta=meta)
+        self._add(dt_id=dt_id, acid=acid, send_type='track', event_name=event_name, properties_add=all_properties,
+                  meta=meta)
 
     @deprecated("This function is deprecated, please use track() instead.")
     def track_first(self, dt_id=None, acid=None, event_name='#app_install', properties=None):
@@ -199,8 +192,8 @@ class DTAnalytics(object, _DTApi):
             DTIllegalDataException: 数据格式错误时会抛出此异常
         """
         all_properties = self._public_track_add(event_name, properties)
-        self.__add(dt_id=dt_id, acid=acid, send_type='track', event_name=event_name,
-                   properties_add=all_properties)
+        self._add(dt_id=dt_id, acid=acid, send_type='track', event_name=event_name,
+                  properties_add=all_properties)
 
     def track_batch(self, *events: Event):
         """ Track a batch of events
@@ -209,21 +202,7 @@ class DTAnalytics(object, _DTApi):
         """
         for event in events:
             self._public_track_add(event.event_name, event.properties)
-        self.__add_batch("track", *events)
-
-    def flush(self):
-        """
-        立即提交数据到相应的接收端
-        """
-        self.__consumer.flush()
-
-    def close(self):
-        """
-        关闭并退出 sdk
-
-        请在退出前调用本接口，以避免缓存内的数据丢失
-        """
-        self.__consumer.close()
+        self._add_batch("track", *events)
 
     def _public_track_add(self, event_name, properties):
         if not is_str(event_name):
