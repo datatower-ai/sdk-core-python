@@ -30,7 +30,7 @@ def _test(args):
     from datatower_ai.src.service.http_service import _HttpService
     _HttpService._simulate = None if args.ns_sim < 0 else args.ns_sim
     for i in range(0, args.n):
-        dt.track("123", None, "test_event", {"#bundle_id": ""})
+        dt.track("123", None, "test_event", {"#bundle_id": "", "i": i})
     dt.flush()
     dt.close()
 
@@ -42,7 +42,7 @@ def _test_batch(args):
     from datatower_ai.src.service.http_service import _HttpService
     _HttpService._simulate = None if args.ns_sim < 0 else args.ns_sim
     for i in range(0, args.n):
-        dt.track("123", None, "test_event", {"#bundle_id": ""})
+        dt.track_batch(*[Event("123", None, "test_event_batch", {"i": i}, {"#bundle_id": ""}) for _ in range(args.m)])
     dt.flush()
     dt.close()
 

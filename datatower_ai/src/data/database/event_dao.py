@@ -5,6 +5,7 @@ from typing import List, Tuple, Callable, Any, Optional
 from future.types.newint import long
 
 from datatower_ai.src.strategy.exceed_insertion_strategy import ExceedInsertionStrategy
+from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor
 from datatower_ai.src.util.performance.time_monitor import TimeMonitor
 
 _table_name = "events"
@@ -196,7 +197,7 @@ class DTEventDao:
     def __query_all_inner(c: Cursor):
         c.execute(DTEventEntity.query_all_unqueried_statement())
         result = c.fetchall()
-        c.executemany(DTEventEntity.set_queried_statement(True), map(lambda x: (x[0],), result))
+        DTEventDao.__set_to_queried(c, *map(lambda x: (x[0],), result))
         return _from_query_result(result)
 
     def query_batch(self, limit: int, offset: int = 0) -> List[DTEventEntity]:
@@ -213,15 +214,21 @@ class DTEventDao:
     def __query_batch_inner(c: Cursor, limit: int, offset: int):
         c.execute(DTEventEntity.query_batch_unquired_statement(limit, offset))
         result = c.fetchall()
-        with TimeMonitor().start_with("event_dao-set_queried"):
-            c.executemany(DTEventEntity.set_queried_statement(True), map(lambda x: (x[0],), result))
+        DTEventDao.__set_to_queried(c, *map(lambda x: (x[0],), result))
         return _from_query_result(result)
 
-    def restore_to_unquired(self, ids: List[Tuple]):
-        self.__write_func(lambda c: self.__restore_to_unquired_inner(c, ids))
+    @staticmethod
+    def __set_to_queried(c: Cursor, *ids: Tuple):
+        timer = TimeMonitor().start_with("event_dao-set_queried")
+        c.executemany(DTEventEntity.set_queried_statement(True), ids)
+        timer.stop(one_shot=False)
+        _CounterMonitor["event_dao-set_queried"] += len(ids)
+
+    def restore_to_unqueried(self, ids: List[Tuple]):
+        self.__write_func(lambda c: self.__restore_to_unqueried_inner(c, ids))
 
     @staticmethod
-    def __restore_to_unquired_inner(c: Cursor, ids: List[Tuple]):
+    def __restore_to_unqueried_inner(c: Cursor, ids: List[Tuple]):
         c.executemany(DTEventEntity.set_queried_statement(False), ids)
 
     def delete_by_ids(self, ids: List[Tuple]):

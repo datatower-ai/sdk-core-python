@@ -19,7 +19,7 @@ v1:
 DT_DB_VERSION = 1
 
 
-class _DTDatabase(Singleton):
+class _DTDatabaseBase:
     """Database for DT Core
 
     This is a singleton class, feel safe to call `DTDatabase()` multiple times.
@@ -29,10 +29,10 @@ class _DTDatabase(Singleton):
     2. add its creator to __on_create()
     """
 
-    def __init__(self):
-        self.__conn = sqlite3.connect("datatower_ai.db", check_same_thread=False)
+    def __init__(self, name: str):
+        self.__conn = sqlite3.connect(name, check_same_thread=False)
         self.__swmr_lock = SingleWriteMultiReadLock()
-        self.__db_file_lock = FileLock("datatower_ai.db.lock")
+        self.__db_file_lock = FileLock(name + ".lock")
 
         # Place DAOs below
         self.event_dao = DTEventDao(self.do_write, self.do_read)
@@ -107,8 +107,9 @@ class _DTDatabase(Singleton):
 
         Use this method to insert/update/delete data if using this Database in concurrent env.
         """
-        with TimeMonitor().start_with("acquire_db_file_lock"):
-            self.__db_file_lock.acquire()
+        timer = TimeMonitor().start("acquire_db_file_lock")
+        self.__db_file_lock.acquire()
+        timer.stop(one_shot=False)
         self.__swmr_lock.acquire_write()
         try:
             cursor = self.__conn.cursor()
@@ -128,8 +129,9 @@ class _DTDatabase(Singleton):
 
         Use this method to query data if using this Database in concurrent env.
         """
-        with TimeMonitor().start_with("acquire_db_file_lock"):
-            self.__db_file_lock.acquire()
+        timer = TimeMonitor().start("acquire_db_file_lock")
+        self.__db_file_lock.acquire()
+        timer.stop(one_shot=False)
         self.__swmr_lock.acquire_read()
         try:
             cursor = self.__conn.cursor()
@@ -142,4 +144,18 @@ class _DTDatabase(Singleton):
             self.__swmr_lock.release_read()
             self.__db_file_lock.release()
         return result
+
+
+class _DTDatabase(Singleton):
+    def __init__(self):
+        self.__instances = {}
+
+    def get(self, name: str) -> _DTDatabaseBase:
+        if name not in self.__instances:
+            # "datatower_ai.db"
+            self.__instances[name] = _DTDatabaseBase(name)
+        return self.__instances[name]
+
+    def get_by_app_id(self, app_id: str) -> _DTDatabaseBase:
+        return self.get("datatower_ai_{}.db".format(app_id))
 
