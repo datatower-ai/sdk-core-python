@@ -1,5 +1,6 @@
 import fcntl
 import os
+from threading import Semaphore
 
 from datatower_ai.src.util.exception import DTException
 
@@ -56,16 +57,32 @@ else:
 class FileLock(object):
     def __init__(self, file_name: str):
         self.__fd = open(file_name, "w")
+        self.__semaphore = Semaphore()
+        self.__count = 0
 
     def __enter__(self):
-        _lock(self.__fd)
+        self.__lock()
         return self
 
     def __exit__(self, t, v, tb):
-        _unlock(self.__fd)
+        self.__unlock()
 
     def acquire(self):
-        _lock(self.__fd)
+        self.__lock()
 
     def release(self):
-        _unlock(self.__fd)
+        self.__unlock()
+
+    def __lock(self):
+        self.__semaphore.acquire()
+        _lock(self.__fd)
+        self.__count += 1           # This lock can reentrant in same process, therefore add a counter.
+        self.__semaphore.release()
+
+    def __unlock(self):
+        self.__semaphore.acquire()
+        self.__count = max(0, self.__count - 1)
+        print("xxxx self.__count: {}".format(self.__count))
+        if self.__count <= 0:
+            _unlock(self.__fd)
+        self.__semaphore.release()
