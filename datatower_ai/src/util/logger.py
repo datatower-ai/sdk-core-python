@@ -15,22 +15,29 @@ class Logger:
     logger.propagate = False
     logger.addHandler(__handler)
 
+    __allowed_level = logging.INFO
+
     @staticmethod
     def set(enable: bool, log_level=logging.INFO):
         Logger.is_print = enable
         Logger.logger.setLevel(log_level)
+        Logger.__allowed_level = log_level
 
     @staticmethod
     def log(msg=None, level=logging.INFO):
-        if msg is not None and Logger.is_print:
+        if msg is not None and Logger.is_print and level >= Logger.__allowed_level:
             if level <= logging.DEBUG:
-                Logger.logger.debug(msg)
+                #Logger.logger.debug(msg)
+                print("DEBUG: {} - {}".format(Logger.__prefix, msg))
             elif level <= logging.INFO:
-                Logger.logger.info(msg)
+                #Logger.logger.info(msg)
+                print("INFO: {} - {}".format(Logger.__prefix, msg))
             elif level <= logging.WARNING:
-                Logger.logger.warning(msg)
+                #Logger.logger.warning(msg)
+                print("WARNING: {} - {}".format(Logger.__prefix, msg))
             else:
-                Logger.logger.error(msg)
+                #Logger.logger.error(msg)
+                print("ERROR: {} - {}".format(Logger.__prefix, msg))
 
     @staticmethod
     def debug(msg):
