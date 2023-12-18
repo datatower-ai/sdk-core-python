@@ -1,10 +1,11 @@
 import gzip
 import json
-import logging
-import time
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, List, Callable, Any, Deque
+
+from urllib3.exceptions import MaxRetryError
 
 from datatower_ai.sdk import is_str
+from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor
 
 try:
     from urllib.parse import urlparse
@@ -69,20 +70,30 @@ class _HttpService(object):
             return False
 
     def __post(self, url: str, data: Union[str, Dict], headers: Optional[Dict] = None) -> bool:
-        if Logger.is_print and _HttpService._simulate is not None:
-            Logger.info("[HttpService] Simulating the HttpService result -> {}".format(_HttpService._simulate))
-            return _HttpService._simulate > 0
-
         if headers is None:
             headers = {}
         if is_str(data):
             compress_type = 'gzip'
             if self.compress:
-                data = _gzip_string(data.encode("utf-8"))
+                encoded = data.encode("utf-8")
+                data = _gzip_string(encoded)
+
+                cnt = _CounterMonitor["http_compress_rate_cnt"]
+                pre_sum = _CounterMonitor["http_avg_compress_rate"] * cnt
+                _CounterMonitor["http_avg_compress_rate"] = (pre_sum + len(encoded) / len(data)) / (cnt + 1)
+                # ~Long Short Term Memory, 5/1000
+                new_cnt = (cnt + 1) % 1000
+                _CounterMonitor["http_compress_rate_cnt"] = new_cnt if new_cnt != 0 else 5
+                Logger.debug("[HttpService] avg compress rate: {:.4f}".format(_CounterMonitor["http_avg_compress_rate"]))
             else:
                 compress_type = 'none'
                 data = data.encode("utf-8")
             headers['compress'] = compress_type
+
+        if Logger.is_print and _HttpService._simulate is not None:
+            success = _HttpService._simulate > 0
+            Logger.info("[HttpService] Simulating the HttpService result -> {}, {}".format(success, _HttpService._simulate))
+            return success
 
         try:
             with requests.Session() as s:
@@ -100,7 +111,45 @@ class _HttpService(object):
                 else:
                     Logger.log('response={}'.format(response.status_code))
                     raise DTNetworkException("Unexpected Http status code " + str(response.status_code))
+        except MaxRetryError as e:
+            raise DTNetworkException("")
         except ConnectionError as e:
             raise DTNetworkException("Data transmission failed due to " + repr(e))
         except Exception as e:
             raise DTNetworkException("Http failed due to " + repr(e))
+
+    __MB = 1024 * 1024
+
+    @staticmethod
+    def approx_split_data_by_mb(data: Union[List, Deque], to_str: Callable[[Any], str] = lambda x: x) -> List[List]:
+        """Divide the data to approximate size of 1mb (after compress, with dynamic compress rate)"""
+        avg_compress_rate = _CounterMonitor["http_avg_compress_rate"].value
+        Logger.debug("Current average compress rate: {}".format(avg_compress_rate))
+        if len(data) == 0:
+            return []
+        if avg_compress_rate <= 0:
+            return [data]
+
+        result = []
+        group = []
+        size = 0
+        for item in data:
+            stringed = to_str(item)
+            if stringed is not str:
+                return [data]
+            item_size = len(stringed.encode("utf-8")) / avg_compress_rate
+            if size + item_size >= _HttpService.__MB:
+                if len(group) == 0:
+                    result.append([item])
+                    size = 0
+                else:
+                    result.append(group)
+                    group = [item]
+                    size = item_size
+            else:
+                group.append(item)
+                size += item_size
+
+        if len(group) > 0:
+            result.append(group)
+        return result
