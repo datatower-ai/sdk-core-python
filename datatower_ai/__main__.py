@@ -12,6 +12,7 @@ import datatower_ai.__cl.analytics as analytics
 import datatower_ai.__cl.raw_track as raw_tracker
 import datatower_ai.__cl.test as test
 import datatower_ai.__cl.ad as ad
+from datatower_ai.src.util._holder import _Holder
 
 
 def _test(dt, args):
@@ -80,7 +81,7 @@ parser.add_argument("--exceed_insertion_strategy", default="delete", type=str)
 # ┌────────────────────────┐
 # │ API Specific Arguments │
 # └────────────────────────┘
-subparsers = parser.add_subparsers(required=True)
+subparsers = parser.add_subparsers(dest="feature")
 
 user.init_parser(subparsers.add_parser("user", help="User related APIs"))
 analytics.init_parser(subparsers.add_parser("track", help="Track a event"))
@@ -101,6 +102,7 @@ test.init_parser(subparsers.add_parser("testt", add_help=False))
 # │ Others Arguments │
 # └──────────────────┘
 parser.add_argument("--ns_sim", default=-1, type=int)
+parser.add_argument("-show_statistics", dest="f_show_statistics", action="store_true", help=None)
 
 # ═══════════════════════════════════════════════════════════════
 args = parser.parse_args()
@@ -134,29 +136,30 @@ if args.f_debug:
 consumer_name = args.consumer
 consumer = None
 if consumer_name.lower() == "database_cache":
-    exceed_insertion_strategy = ExceedInsertionStrategy.DELETE
-    if args.exceed_insertion_strategy.upper() == "DISCARD":
-        exceed_insertion_strategy = ExceedInsertionStrategy.DISCARD
-    elif args.exceed_insertion_strategy.upper() == "DISCARD_HEAD":
-        exceed_insertion_strategy = ExceedInsertionStrategy.DISCARD_HEAD
-    elif args.exceed_insertion_strategy.upper() == "ABORT":
-        exceed_insertion_strategy = ExceedInsertionStrategy.ABORT
-    elif args.exceed_insertion_strategy.upper() == "IGNORE":
-        exceed_insertion_strategy = ExceedInsertionStrategy.IGNORE
-
-    consumer = DatabaseCacheConsumer(
-        app_id=args.app_id,
-        token=args.token,
-        server_url=args.server_url,
-        batch_size=args.batch_size,
-        network_retries=args.network_retries,
-        network_timeout=args.network_timeout,
-        num_db_threads=args.num_db_threads,
-        num_network_threads=args.num_network_threads,
-        thread_keep_alive_ms=args.thread_keep_alive_ms,
-        cache_size=args.cache_size,
-        exceed_insertion_strategy=args.exceed_insertion_strategy
-    )
+    # exceed_insertion_strategy = ExceedInsertionStrategy.DELETE
+    # if args.exceed_insertion_strategy.upper() == "DISCARD":
+    #     exceed_insertion_strategy = ExceedInsertionStrategy.DISCARD
+    # elif args.exceed_insertion_strategy.upper() == "DISCARD_HEAD":
+    #     exceed_insertion_strategy = ExceedInsertionStrategy.DISCARD_HEAD
+    # elif args.exceed_insertion_strategy.upper() == "ABORT":
+    #     exceed_insertion_strategy = ExceedInsertionStrategy.ABORT
+    # elif args.exceed_insertion_strategy.upper() == "IGNORE":
+    #     exceed_insertion_strategy = ExceedInsertionStrategy.IGNORE
+    #
+    # consumer = DatabaseCacheConsumer(
+    #     app_id=args.app_id,
+    #     token=args.token,
+    #     server_url=args.server_url,
+    #     batch_size=args.batch_size,
+    #     network_retries=args.network_retries,
+    #     network_timeout=args.network_timeout,
+    #     num_db_threads=args.num_db_threads,
+    #     num_network_threads=args.num_network_threads,
+    #     thread_keep_alive_ms=args.thread_keep_alive_ms,
+    #     cache_size=args.cache_size,
+    #     exceed_insertion_strategy=args.exceed_insertion_strategy
+    # )
+    raise ValueError("database_cache consumer is not available at this time!".format(consumer_name))
 elif consumer_name.lower() == "async_batch":
     consumer = AsyncBatchConsumer(
         app_id=args.app_id,
@@ -171,6 +174,7 @@ else:
     raise ValueError("Given --consumer \"{}\" is not valid!".format(consumer_name))
 
 dt = DTAnalytics(consumer=consumer, debug=args.f_debug, log_level=log_level,)
+_Holder().show_statistics = args.f_show_statistics
 
 print("┗" + ("━"*sep_length) + "┛")
 args.op(dt, args)     # Call Api func

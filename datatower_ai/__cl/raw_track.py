@@ -1,10 +1,11 @@
 import json
 
 from datatower_ai import *
+from datatower_ai.src.util.json_util import json_loads_byteified
 
 
 def handle(dt, args):
-    jo = json.loads(args.json)
+    jo = json_loads_byteified(args.json)
     props = jo.pop("properties", None)
     meta = jo
     event_name = jo.get("#event_name", "")

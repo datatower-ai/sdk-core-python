@@ -5,17 +5,40 @@ from datatower_ai.src.util.type_check import is_number, is_str
 
 from datatower_ai import DTMetaDataException, DTIllegalDataException
 
-__META = (("#app_id", str), ("#bundle_id", str), ("#android_id", str), ("#gaid", str), ("#dt_id", str), ("#acid", str), ("#event_time", int), ("#event_syn", str))
+__META = (("#app_id", str), ("#bundle_id", str), ("#android_id", str), ("#gaid", str), ("#dt_id", str), ("#acid", str),
+          ("#event_time", int), ("#event_syn", str))
 __COMPULSORY_META = ("#app_id", "#bundle_id", "#event_time", "#event_name", "#event_type", "#event_syn")
 __NAME_REGEX = "^[#$a-zA-Z][a-zA-Z0-9_]{0,63}$"
 
-__PRESET_PROPS_COMMON = (("$uid", str), ("#dt_id", str), ("#acid", str), ("#event_syn", str), ("#session_id", str), ("#device_manufacturer", str), ("#event_name", str), ("#is_foreground", bool), ("#android_id", str), ("#gaid", str), ("#mcc", str), ("#mnc", str), ("#os_country_code", str), ("#os_lang_code", str), ("#event_time", int), ("#bundle_id", str), ("#app_version_code", int), ("#app_version_name", str), ("#sdk_type", str), ("#sdk_version_name", str), ("#os", str), ("#os_version_name", str), ("#os_version_code", int), ("#device_brand", str), ("#device_model", str), ("#build_device", str), ("#screen_height", int), ("#screen_width", int), ("#memory_used", str), ("#storage_used", str), ("#network_type", str), ("#simulator", bool), ("#fps", int), ("$ip", str), ("$country_code", str), ("$server_time", int))
-__PRESET_PROPS_AD = (("#ad_seq", str), ("#ad_id", str), ("#ad_type_code", str), ("#ad_platform_code", str), ("#ad_entrance", str), ("#ad_result", bool), ("#ad_duration", int), ("#ad_location", str), ("#errorCode", int), ("#errorMessage", str), ("#ad_value", str), ("#ad_currency", str), ("#ad_precision", str), ("#ad_country_code", str), ("#ad_mediation_code", str), ("#ad_mediation_id", str), ("#ad_conversion_source", str), ("#ad_click_gap", str), ("#ad_return_gap", str), ("#error_code", str), ("#error_message", str), ("#load_result", str), ("#load_duration", str))
-__PRESET_PROPS_IAS = (("#ias_seq", str), ("#ias_original_order", str), ("#ias_order", str), ("#ias_sku", str), ("#ias_price", float), ("#ias_currency", str), ("$ias_price_exchange", float))
+__PRESET_PROPS_COMMON = (("$uid", str), ("#dt_id", str), ("#acid", str), ("#event_syn", str), ("#session_id", str),
+                         ("#device_manufacturer", str), ("#event_name", str), ("#is_foreground", bool),
+                         ("#android_id", str), ("#gaid", str), ("#mcc", str), ("#mnc", str), ("#os_country_code", str),
+                         ("#os_lang_code", str), ("#event_time", int), ("#bundle_id", str), ("#app_version_code", int),
+                         ("#app_version_name", str), ("#sdk_type", str), ("#sdk_version_name", str), ("#os", str),
+                         ("#os_version_name", str), ("#os_version_code", int), ("#device_brand", str),
+                         ("#device_model", str), ("#build_device", str), ("#screen_height", int),
+                         ("#screen_width", int), ("#memory_used", str), ("#storage_used", str), ("#network_type", str),
+                         ("#simulator", bool), ("#fps", int), ("$ip", str), ("$country_code", str),
+                         ("$server_time", int))
+__PRESET_PROPS_AD = (("#ad_seq", str), ("#ad_id", str), ("#ad_type_code", str), ("#ad_platform_code", str),
+                     ("#ad_entrance", str), ("#ad_result", bool), ("#ad_duration", int), ("#ad_location", str),
+                     ("#errorCode", int), ("#errorMessage", str), ("#ad_value", str), ("#ad_currency", str),
+                     ("#ad_precision", str), ("#ad_country_code", str), ("#ad_mediation_code", str),
+                     ("#ad_mediation_id", str), ("#ad_conversion_source", str), ("#ad_click_gap", str),
+                     ("#ad_return_gap", str), ("#error_code", str), ("#error_message", str), ("#load_result", str),
+                     ("#load_duration", str))
+__PRESET_PROPS_IAS = (("#ias_seq", str), ("#ias_original_order", str), ("#ias_order", str), ("#ias_sku", str),
+                      ("#ias_price", float), ("#ias_currency", str), ("$ias_price_exchange", float))
 __PRESET_EVENT = {
-    "#app_install": (("#referrer_url", str), ("#referrer_click_time", int), ("#app_install_time", int), ("#instant_experience_launched", bool), ("#failed_reason", str), ("#cnl", str)),
+    "#app_install": (("#referrer_url", str), ("#referrer_click_time", int), ("#app_install_time", int),
+                     ("#instant_experience_launched", bool), ("#failed_reason", str), ("#cnl", str)),
     "#session_start": (("#is_first_time", bool), ("#resume_from_background", bool), ("#start_reason", str)),
-    "$app_install": (("$network_id", str), ("$network_name", str), ("$tracker_id", str), ("$tracker_name", str), ("$channel_id", str), ("$channel_sub_id", str), ("$channel_ssub_id", str), ("$channel_name", str), ("$channel_sub_name", str), ("$channel_ssub_name", str), ("$channel_platform_id", int), ("$channel_platform_name", str), ("$attribution_source", str), ("$fraud_network_id", str), ("$original_tracker_id", str), ("$original_tracker_name", str), ("$original_network_id", str), ("$original_network_name", str)),
+    "$app_install": (("$network_id", str), ("$network_name", str), ("$tracker_id", str), ("$tracker_name", str),
+                     ("$channel_id", str), ("$channel_sub_id", str), ("$channel_ssub_id", str), ("$channel_name", str),
+                     ("$channel_sub_name", str), ("$channel_ssub_name", str), ("$channel_platform_id", int),
+                     ("$channel_platform_name", str), ("$attribution_source", str), ("$fraud_network_id", str),
+                     ("$original_tracker_id", str), ("$original_tracker_name", str), ("$original_network_id", str),
+                     ("$original_network_name", str)),
     "#session_end": (("#session_duration", int),),
     "#ad_load_begin": __PRESET_PROPS_AD,
     "#ad_load_end": __PRESET_PROPS_AD,
@@ -29,9 +52,10 @@ __PRESET_EVENT = {
     "#ad_rewarded": __PRESET_PROPS_AD,
     "#ad_conversion": __PRESET_PROPS_AD + (("$earnings", float),),
     "#ad_paid": __PRESET_PROPS_AD,
-    "#iap_purchase_success": (("#iap_order", str), ("#iap_sku", str), ("#iap_price", float), ("#iap_currency", str), ("$iap_price_exchange", float)),
+    "#iap_purchase_success": (("#iap_order", str), ("#iap_sku", str), ("#iap_price", float), ("#iap_currency", str),
+                              ("$iap_price_exchange", float)),
     "#ias_subscribe_success": __PRESET_PROPS_IAS,
-    "#ias_subscribe_notify": __PRESET_PROPS_IAS + (("$original_ios_notification_type", str))
+    "#ias_subscribe_notify": __PRESET_PROPS_IAS + (("$original_ios_notification_type", str),)
 }
 
 
@@ -46,6 +70,7 @@ def move_meta(source_properties, target, delete = True):
 
 
 def extra_verify(dictionary):
+    print(dictionary)
     for prop in __COMPULSORY_META:
         if prop not in dictionary:
             raise DTMetaDataException("Required meta property \"{}\" is missing!".format(prop))

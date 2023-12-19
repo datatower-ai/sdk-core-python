@@ -2,7 +2,7 @@
 import gzip
 import json
 
-from urllib3.exceptions import MaxRetryError
+from urllib3.exceptions import MaxRetryError, ConnectionError
 
 from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor
 from datatower_ai.src.util.type_check import is_str
@@ -107,13 +107,13 @@ class _HttpService(object):
                     if response_data["code"] == 0:
                         return True
                     else:
-                        raise DTIllegalDataException("Unexpected result code: " + str(response_data["code"]) \
+                        raise DTIllegalDataException("Unexpected result code: " + str(response_data["code"])
                                                      + " reason: " + response_data["msg"])
                 else:
                     Logger.log('response={}'.format(response.status_code))
                     raise DTNetworkException("Unexpected Http status code " + str(response.status_code))
         except MaxRetryError as e:
-            raise DTNetworkException("")
+            raise DTNetworkException("Reached max retry limit!")
         except ConnectionError as e:
             raise DTNetworkException("Data transmission failed due to " + repr(e))
         except Exception as e:

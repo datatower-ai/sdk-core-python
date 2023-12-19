@@ -5,6 +5,7 @@ import logging
 
 from datatower_ai import *
 from datatower_ai.src.service.http_service import _HttpService
+from datatower_ai.src.util._holder import _Holder
 
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -32,6 +33,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     # 且打开日志开关
     dt.enable_log(True)
+    _Holder().show_statistics = True
 
     meta = {
         "#bundle_id": "com.example.example",

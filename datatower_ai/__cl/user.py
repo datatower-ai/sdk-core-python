@@ -1,6 +1,7 @@
 import json
 
 from datatower_ai import *
+from datatower_ai.src.util.json_util import json_loads_byteified
 
 
 def handle(dt, args):
@@ -9,8 +10,8 @@ def handle(dt, args):
 
     dt_id = args.dt_id
     acid = args.acid
-    props = json.loads(args.props) if args.props is not None else None
-    meta = json.loads(args.meta) if args.meta is not None else None
+    props = json_loads_byteified(args.props) if args.props is not None else None
+    meta = json_loads_byteified(args.meta) if args.meta is not None else None
 
     if api == "set":
         dt.user_set(dt_id, acid, props, meta)

@@ -1,6 +1,7 @@
 import json
 
 from datatower_ai import *
+from datatower_ai.src.util.json_util import json_loads_byteified
 
 
 def handle(dt, args):
@@ -9,8 +10,8 @@ def handle(dt, args):
 
     dt_id = args.dt_id
     acid = args.acid
-    props = json.loads(args.props) if args.props is not None else None
-    meta = json.loads(args.meta) if args.meta is not None else None
+    props = json_loads_byteified(args.props) if args.props is not None else None
+    meta = json_loads_byteified(args.meta) if args.meta is not None else None
 
     ad_id = args.ad_id
     ad_type = args.ad_type
@@ -19,7 +20,7 @@ def handle(dt, args):
     mediation_id = args.mediation_id
     seq = args.seq
     duration = args.duration
-    result = args.result
+    result = args.result != 0
     error_code = args.error_code
     error_msg = args.error_message
     location = args.location

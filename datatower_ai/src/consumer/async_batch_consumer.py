@@ -34,7 +34,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
         创建 AsyncBatchConsumer
 
         Args:
-            appid: 项目的 APP ID
+            app_id: 项目的 APP ID
             token: 通信令牌
             interval: 推送数据的最大时间间隔, 单位为秒, 默认为 3 秒
             flush_size: 队列缓存的阈值，超过此值将立即进行发送
@@ -150,7 +150,11 @@ class AsyncBatchConsumer(_AbstractConsumer):
                         for item in split:
                             self.__flush_buffer.appendleft(item)
 
-    def __del__(self):
+    @staticmethod
+    def _print_statistics():
+        from datatower_ai.src.util._holder import _Holder
+        if not _Holder().show_statistics:
+            return
         tm = TimeMonitor()
         Logger.log("="*80)
         Logger.log("[Statistics] 'upload' time used sum: {}, avg: {}".format(
@@ -194,5 +198,6 @@ class AsyncBatchConsumer(_AbstractConsumer):
 
                 # 发现 stop 标志位时安全退出
                 if self._stop_event.isSet():
+                    AsyncBatchConsumer._print_statistics()
                     break
             self._finished_event.set()
