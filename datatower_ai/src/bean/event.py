@@ -1,11 +1,8 @@
-from typing import Dict
-
 from datatower_ai.src.util.exception import DTMetaDataException
 
 
 class Event:
-    def __init__(self, dt_id: str = None, acid: str = None, event_name: str = None,
-                 properties: Dict = None, meta: Dict = None):
+    def __init__(self, dt_id=None, acid=None, event_name=None, properties=None, meta=None):
         """Event data
 
         :param dt_id: A unique identifier per user per device.

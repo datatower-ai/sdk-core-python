@@ -55,7 +55,7 @@ else:
 
 
 class FileLock(object):
-    def __init__(self, file_name: str):
+    def __init__(self, file_name):
         self.__fd = open(file_name, "w")
         self.__semaphore = Semaphore()
         self.__count = 0
@@ -82,7 +82,6 @@ class FileLock(object):
     def __unlock(self):
         self.__semaphore.acquire()
         self.__count = max(0, self.__count - 1)
-        print("xxxx self.__count: {}".format(self.__count))
         if self.__count <= 0:
             _unlock(self.__fd)
         self.__semaphore.release()

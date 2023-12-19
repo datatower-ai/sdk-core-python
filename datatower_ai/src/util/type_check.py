@@ -19,7 +19,7 @@ except NameError:
         return isinstance(n, int)
 
 
-def isNumber(s):
+def is_number(s):
     if is_int(s):
         return True
     if isinstance(s, float):

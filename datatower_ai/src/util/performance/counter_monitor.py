@@ -18,9 +18,9 @@ CounterMonitor["xxx"] %= value
 """
 
 import sys
-from typing import Dict, Union, Callable, Any
 
 from datatower_ai.src.util.thread.swmr_lock import SingleWriteMultiReadLock
+import six
 
 
 class _CmCounter:
@@ -108,7 +108,7 @@ class _CmCounter:
         return self.__str__()
 
     @staticmethod
-    def _op(other, op: Callable[[Union[int, float]], Any]):
+    def _op(other, op):
         if type(other) is int or type(other) is float:
             return op(other)
         elif isinstance(other, _CmCounter):
@@ -120,7 +120,7 @@ class _CounterMonitorMeta(type):
     __locker = SingleWriteMultiReadLock()
     
     @staticmethod
-    def _op(key, op: Callable[[Union[int, float]], Union[int, float]]):
+    def _op(key, op):
         _CounterMonitor.__locker.acquire_write()
         ov = _CounterMonitor.__table.get(key, 0)
         _CounterMonitor.__table[key] = op(ov)
@@ -133,7 +133,7 @@ class _CounterMonitorMeta(type):
         _CounterMonitor.__locker.release_read()
         return value
 
-    def __setitem__(cls, key, value: Union[int, float, _CmCounter]):
+    def __setitem__(cls, key, value):
         v = value if not isinstance(value, _CmCounter) else value.value
         _CounterMonitor.__locker.acquire_write()
         _CounterMonitor.__table[key] = v
@@ -143,13 +143,8 @@ class _CounterMonitorMeta(type):
         return _CmCounter(item)
 
 
-if sys.version_info[0] >= 3:
-    class _CounterMonitor(object, metaclass=_CounterMonitorMeta):
-        pass
-else:
-    class _CounterMonitor(object):
-        __metaclass__ = _CounterMonitorMeta
-        pass
+class _CounterMonitor(six.with_metaclass(_CounterMonitorMeta, object)):
+    pass
 
 
 if __name__ == "__main__":

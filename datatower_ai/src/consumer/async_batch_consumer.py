@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import logging
 from collections import deque
 
@@ -8,7 +9,6 @@ try:
 except ImportError:
     import Queue as queue
 import threading
-from typing import List
 
 from datatower_ai.src.util.logger import Logger
 
@@ -63,7 +63,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
     def add(self, get_msg):
         self._add(get_msg())
 
-    def _add(self, msgs: List):
+    def _add(self, msgs):
         try:
             for msg in msgs:
                 self.__queue.put_nowait(msg)

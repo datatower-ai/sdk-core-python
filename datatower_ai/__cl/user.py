@@ -3,7 +3,7 @@ import json
 from datatower_ai import *
 
 
-def handle(dt: DTAnalytics, args):
+def handle(dt, args):
     api = args.api.lower()
     print("User - {}".format(api))
 

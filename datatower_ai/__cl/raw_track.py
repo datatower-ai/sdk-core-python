@@ -3,7 +3,7 @@ import json
 from datatower_ai import *
 
 
-def handle(dt: DTAnalytics, args):
+def handle(dt, args):
     jo = json.loads(args.json)
     props = jo.pop("properties", None)
     meta = jo

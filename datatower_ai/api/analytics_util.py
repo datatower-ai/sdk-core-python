@@ -1,16 +1,13 @@
-from typing import Dict
-
 from datatower_ai.api.base import _DTApi
-from datatower_ai.src.consumer.abstract_consumer import _AbstractConsumer
 from datatower_ai.src.util.performance.time_monitor import TimeMonitor
 
 
 class DTAnalyticsUtils(_DTApi):
-    def __init__(self, consumer: _AbstractConsumer, debug: bool):
+    def __init__(self, consumer, debug):
         super(DTAnalyticsUtils, self).__init__(consumer, debug)
         self.__timers = {}
 
-    def track_timer_start(self, event_name: str, dt_id: str = None, acid: str = None):
+    def track_timer_start(self, event_name, dt_id = None, acid = None):
         """ Initialize and start a timer for the event (associate with IDs), unit: millisecond.
 
         :param event_name: Name of the event.
@@ -20,7 +17,7 @@ class DTAnalyticsUtils(_DTApi):
         key = self.__get_key(event_name, dt_id, acid)
         self.__timers[key] = TimeMonitor().start(key)
 
-    def track_timer_pause(self, event_name: str, dt_id: str = None, acid: str = None):
+    def track_timer_pause(self, event_name, dt_id = None, acid = None):
         """ Pause the timer with given event name (associate with IDs).
 
         :param event_name: Name of the event.
@@ -33,7 +30,7 @@ class DTAnalyticsUtils(_DTApi):
             return
         timer.pause()
 
-    def track_timer_resume(self, event_name: str, dt_id: str = None, acid: str = None):
+    def track_timer_resume(self, event_name, dt_id = None, acid = None):
         """ Resume the timer with given event name (associate with IDs)
 
         :param event_name: Name of the event.
@@ -46,8 +43,8 @@ class DTAnalyticsUtils(_DTApi):
             return
         timer.resume()
 
-    def track_timer_stop(self, event_name: str, dt_id: str = None, acid: str = None,
-                         properties: Dict = None, meta: Dict = None):
+    def track_timer_stop(self, event_name, dt_id = None, acid = None,
+                         properties = None, meta = None):
         """ Stop the timer with event name (associate with IDs) and report the duration in ms together with
         properties and meta.
 
@@ -71,5 +68,5 @@ class DTAnalyticsUtils(_DTApi):
         self._add(dt_id, acid, "track", event_name, properties, meta)
 
     @staticmethod
-    def __get_key(event_name: str, dt_id: str = None, acid: str = None):
+    def __get_key(event_name, dt_id = None, acid = None):
         return "en={}&dt_id={}&acid={}".format(event_name, dt_id, acid)

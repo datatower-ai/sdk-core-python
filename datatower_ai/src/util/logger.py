@@ -18,7 +18,7 @@ class Logger:
     __allowed_level = logging.INFO
 
     @staticmethod
-    def set(enable: bool, log_level=logging.INFO):
+    def set(enable, log_level=logging.INFO):
         Logger.is_print = enable
         Logger.logger.setLevel(log_level)
         Logger.__allowed_level = log_level

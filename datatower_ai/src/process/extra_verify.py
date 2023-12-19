@@ -1,14 +1,13 @@
 import datetime
 import re
-from typing import Dict, List, Any, Tuple, Optional
 
-from future.types.newint import long
+from datatower_ai.src.util.type_check import is_number, is_str
 
 from datatower_ai import DTMetaDataException, DTIllegalDataException
 
 __META = (("#app_id", str), ("#bundle_id", str), ("#android_id", str), ("#gaid", str), ("#dt_id", str), ("#acid", str), ("#event_time", int), ("#event_syn", str))
 __COMPULSORY_META = ("#app_id", "#bundle_id", "#event_time", "#event_name", "#event_type", "#event_syn")
-__NAME_REGEX = re.compile(r"^[#$a-zA-Z][a-zA-Z0-9_]{0,63}$")
+__NAME_REGEX = "^[#$a-zA-Z][a-zA-Z0-9_]{0,63}$"
 
 __PRESET_PROPS_COMMON = (("$uid", str), ("#dt_id", str), ("#acid", str), ("#event_syn", str), ("#session_id", str), ("#device_manufacturer", str), ("#event_name", str), ("#is_foreground", bool), ("#android_id", str), ("#gaid", str), ("#mcc", str), ("#mnc", str), ("#os_country_code", str), ("#os_lang_code", str), ("#event_time", int), ("#bundle_id", str), ("#app_version_code", int), ("#app_version_name", str), ("#sdk_type", str), ("#sdk_version_name", str), ("#os", str), ("#os_version_name", str), ("#os_version_code", int), ("#device_brand", str), ("#device_model", str), ("#build_device", str), ("#screen_height", int), ("#screen_width", int), ("#memory_used", str), ("#storage_used", str), ("#network_type", str), ("#simulator", bool), ("#fps", int), ("$ip", str), ("$country_code", str), ("$server_time", int))
 __PRESET_PROPS_AD = (("#ad_seq", str), ("#ad_id", str), ("#ad_type_code", str), ("#ad_platform_code", str), ("#ad_entrance", str), ("#ad_result", bool), ("#ad_duration", int), ("#ad_location", str), ("#errorCode", int), ("#errorMessage", str), ("#ad_value", str), ("#ad_currency", str), ("#ad_precision", str), ("#ad_country_code", str), ("#ad_mediation_code", str), ("#ad_mediation_id", str), ("#ad_conversion_source", str), ("#ad_click_gap", str), ("#ad_return_gap", str), ("#error_code", str), ("#error_message", str), ("#load_result", str), ("#load_duration", str))
@@ -36,7 +35,7 @@ __PRESET_EVENT = {
 }
 
 
-def move_meta(source_properties, target, delete: bool = True):
+def move_meta(source_properties, target, delete = True):
     if source_properties is None:
         return
     for (key, _) in __META:
@@ -46,7 +45,7 @@ def move_meta(source_properties, target, delete: bool = True):
                 del (source_properties[key])
 
 
-def extra_verify(dictionary: Dict[str, Any]):
+def extra_verify(dictionary):
     for prop in __COMPULSORY_META:
         if prop not in dictionary:
             raise DTMetaDataException("Required meta property \"{}\" is missing!".format(prop))
@@ -68,7 +67,7 @@ def extra_verify(dictionary: Dict[str, Any]):
         raise DTMetaDataException("acid should be str!")
 
     event_name = dictionary["#event_name"]
-    if not __NAME_REGEX.match(event_name):
+    if not __full_match(__NAME_REGEX, event_name):
         raise DTMetaDataException("event_name must be a valid variable name.")
 
     if dictionary["#event_type"] == "track" and (event_name.startswith("#") or event_name.startswith("$")):
@@ -79,8 +78,8 @@ def extra_verify(dictionary: Dict[str, Any]):
         __verify_properties(event_name, dictionary["properties"])
 
 
-def __verify_preset_properties(event_name: str, properties):
-    if not isinstance(properties, Dict):
+def __verify_preset_properties(event_name, properties):
+    if not isinstance(properties, dict):
         raise DTIllegalDataException("Type of \"properties\" of preset event should be Dict!")
     for (key, value) in properties.items():
         tp = __find_prop_in_preset_event(event_name, key)
@@ -96,7 +95,7 @@ def __verify_preset_properties(event_name: str, properties):
             )
 
 
-def __verify_properties(event_name: str, properties):
+def __verify_properties(event_name, properties):
     if event_name == "#user_append" or event_name == "#user_uniq_append":
         __verify_properties_value_4_list(properties, event_name)
     elif event_name == "#user_add":
@@ -112,7 +111,7 @@ def __verify_properties(event_name: str, properties):
 
 def __verify_properties_value_4_list(properties, event_name):
     for value in properties.values():
-        if not isinstance(value, List):
+        if not isinstance(value, list):
             raise DTIllegalDataException("Type of properties for {} should be List".format(event_name))
         __verify_properties_value(
             value,
@@ -122,22 +121,28 @@ def __verify_properties_value_4_list(properties, event_name):
 
 def __verify_properties_value_4_number(properties, event_name):
     for value in properties.values():
-        if not isinstance(value, (int, float, long)):
+
+        if not is_number(value):
             raise DTIllegalDataException(
                 "Type of value ({}, {}) is not supported, should be a valid number!".format(type(value), value))
 
 
 def __verify_properties_value(value, msg):
-    if not isinstance(value, (int, float, long, str, List, Dict, bool, datetime.datetime, datetime.date)):
+    if not is_number(value) and not is_str(value) and not isinstance(value, (list, dict, bool, datetime.datetime, datetime.date)):
         raise DTIllegalDataException(msg)
 
 
 def __verify_properties_key(key):
-    if not __NAME_REGEX.fullmatch(key):
+    if not __full_match(__NAME_REGEX, key):
         raise DTIllegalDataException("")
 
 
-def __find_prop_in_preset_event(event_name, prop_name) -> Optional[Tuple]:
+def __full_match(regex, string, flags=0):
+    """Emulate python-3.4 re.fullmatch()."""
+    return re.match("(?:" + regex + r")\Z", string, flags=flags)
+
+
+def __find_prop_in_preset_event(event_name, prop_name):
     props = __PRESET_EVENT.get(event_name, ())
     if len(props) == 0:
         return None

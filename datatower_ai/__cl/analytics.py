@@ -3,7 +3,7 @@ import json
 from datatower_ai import *
 
 
-def handle(dt: DTAnalytics, args):
+def handle(dt, args):
     event_name = args.event_name
     print("Track - {}".format(event_name))
 

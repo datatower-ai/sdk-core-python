@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Provides ability to run this package directly from __cl without integrated to project."""
 
 import argparse
@@ -81,22 +82,20 @@ parser.add_argument("--exceed_insertion_strategy", default="delete", type=str)
 # └────────────────────────┘
 subparsers = parser.add_subparsers(required=True)
 
-test_sp = subparsers.add_parser("test", add_help=False)
-test_sp.add_argument("n", type=int, help="XXXXX")
-test_sp.set_defaults(op=_test)
-
-test_batch_sp = subparsers.add_parser("test_batch", add_help=False)
-test_batch_sp.add_argument("m", type=int, help="size of each batch")
-test_batch_sp.add_argument("n", type=int, help="num of batches")
-test_batch_sp.set_defaults(op=_test_batch)
-
-
 user.init_parser(subparsers.add_parser("user", help="User related APIs"))
 analytics.init_parser(subparsers.add_parser("track", help="Track a event"))
 raw_tracker.init_parser(subparsers.add_parser("track_raw", help="Track a event by json string"))
 ad.init_parser(subparsers.add_parser("ad", add_help=False))
 test.init_parser(subparsers.add_parser("testt", add_help=False))
 
+# test_sp = subparsers.add_parser("test", add_help=False)
+# test_sp.add_argument("n", type=int, help="XXXXX")
+# test_sp.set_defaults(op=_test)
+#
+# test_batch_sp = subparsers.add_parser("test_batch", add_help=False)
+# test_batch_sp.add_argument("m", type=int, help="size of each batch")
+# test_batch_sp.add_argument("n", type=int, help="num of batches")
+# test_batch_sp.set_defaults(op=_test_batch)
 
 # ┌──────────────────┐
 # │ Others Arguments │

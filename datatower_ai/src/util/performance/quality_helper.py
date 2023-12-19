@@ -1,6 +1,5 @@
 import json
 from enum import Enum
-from typing import Optional, Union, Dict
 
 from datatower_ai.src.util.logger import Logger
 
@@ -30,9 +29,9 @@ class _DTQualityHelper(Singleton):
     def __init__(self):
         self.__wm = None
 
-    def report_quality_message(self, app_id: str, code: int, msg: str,
-                               level: _DTQualityLevel = _DTQualityLevel.ERROR,
-                               worker_manager: Optional[WorkerManager] = None):
+    def report_quality_message(self, app_id, code, msg,
+                               level=_DTQualityLevel.ERROR,
+                               worker_manager=None):
         wm = worker_manager     # using if worker_manager provided.
         if wm is None:
             if self.__wm is None:
@@ -42,7 +41,7 @@ class _DTQualityHelper(Singleton):
         wm.execute(lambda: self.__report_qlt_msg_task(app_id, code, msg, level))
 
     @staticmethod
-    def __report_qlt_msg_task(app_id: str, code: int, msg: str, level: _DTQualityLevel):
+    def __report_qlt_msg_task(app_id, code, msg, level):
         url = "https://debug.roiquery.com/debug"
         body = _DTQualityHelper.__build_data(app_id, code, msg, level)
         if _HttpService(timeout=3000).post_raw(url, body):
@@ -55,7 +54,7 @@ class _DTQualityHelper(Singleton):
             ))
 
     @staticmethod
-    def __build_data(app_id: str, code: int, msg: str, level: _DTQualityLevel) -> Union[str, Dict]:
+    def __build_data(app_id, code, msg, level):
         return json.dumps({
             "app_id": app_id,
             "error_code": code,

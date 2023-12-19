@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import copy
 import datetime
 import json
@@ -9,11 +10,11 @@ from datatower_ai.src.bean.event import Event
 from datatower_ai.src.consumer.abstract_consumer import _AbstractConsumer
 from datatower_ai.src.util.exception import DTIllegalDataException, DTMetaDataException
 from datatower_ai.src.util.logger import Logger
-from datatower_ai.src.util.type_check import is_str, isNumber, is_int
+from datatower_ai.src.util.type_check import is_str, is_number, is_int
 
 
 class _EventProcessor:
-    def __init__(self, consumer: _AbstractConsumer, debug: bool):
+    def __init__(self, consumer, debug):
         self.__consumer = consumer
         self.__debug = debug
 
@@ -23,7 +24,7 @@ class _EventProcessor:
             Event(dt_id=dt_id, acid=acid, event_name=event_name, properties=properties_add, meta=meta)
         )
 
-    def add_batch(self, send_type: str, *events: Event):
+    def add_batch(self, send_type, *events):
         batch = [self.__build_data_from_event(send_type, event) for event in events]
 
         try:
@@ -36,7 +37,7 @@ class _EventProcessor:
         except ValueError:
             raise DTIllegalDataException("Nan or Inf data are not allowed")
 
-    def __build_data_from_event(self, send_type: str, event: Event):
+    def __build_data_from_event(self, send_type, event):
         if event.dt_id is None and event.acid is None:
             raise DTMetaDataException("dt_id and acid must be set at least one")
         if (event.dt_id is not None and not is_str(event.dt_id)) or (
@@ -105,7 +106,7 @@ def assert_properties(event_name, properties):
                 raise DTIllegalDataException(
                     "Event_name=[%s] property key must be a valid variable name. [key=%s]" % (event_name, str(key)))
 
-            if '#user_add' == event_name.lower() and not isNumber(value):
+            if '#user_add' == event_name.lower() and not is_number(value):
                 raise DTIllegalDataException('User_add properties must be number type')
 
 
@@ -115,8 +116,8 @@ def random_str(byte=32):
 
 class DTDateTimeSerializer(json.JSONEncoder):
     """
-        实现 date 和 datetime 类型的自动转化
-        """
+    实现 date 和 datetime 类型的自动转化
+    """
 
     def default(self, obj):
         if isinstance(obj, datetime.datetime):

@@ -1,8 +1,6 @@
 from enum import Enum
-from typing import Union, Dict
 
 from datatower_ai.api.base import _DTApi
-from datatower_ai.src.consumer.abstract_consumer import _AbstractConsumer
 
 
 class AdType(Enum):
@@ -69,7 +67,7 @@ class AdMediation(Enum):
     ADMOB = 7
 
 
-def _get_value(raw: Union[AdType, AdPlatform, AdMediation, int]) -> str:
+def _get_value(raw):
     if type(raw) is int:
         return str(raw)
     if isinstance(raw, (AdType, AdPlatform, AdMediation)):
@@ -81,21 +79,21 @@ def _get_value(raw: Union[AdType, AdPlatform, AdMediation, int]) -> str:
 
 
 class DTAdReport(_DTApi):
-    def __init__(self, consumer: _AbstractConsumer, debug: bool):
+    def __init__(self, consumer, debug):
         super(DTAdReport, self).__init__(consumer, debug)
 
     def report_load_begin(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            seq: str,
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            seq,
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report Ad begins to load.
 
@@ -117,20 +115,20 @@ class DTAdReport(_DTApi):
 
     def report_load_end(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            duration: int,
-            result: bool,
-            seq: str,
-            error_code: int = 0,
-            error_message: str = "",
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            duration,
+            result,
+            seq,
+            error_code = 0,
+            error_message = "",
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report Ad is finish loading.
 
@@ -161,18 +159,18 @@ class DTAdReport(_DTApi):
 
     def report_to_show(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            location: str,
-            seq: str,
-            entrance: str,
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            location,
+            seq,
+            entrance,
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report requesting to show Ad
 
@@ -197,18 +195,18 @@ class DTAdReport(_DTApi):
 
     def report_show(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            location: str,
-            seq: str,
-            entrance: str,
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            location,
+            seq,
+            entrance,
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report requesting to show Ad
 
@@ -233,20 +231,20 @@ class DTAdReport(_DTApi):
 
     def report_show_failed(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            location: str,
-            seq: str,
-            error_code: int,
-            error_message: str,
-            entrance: str,
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            location,
+            seq,
+            error_code,
+            error_message,
+            entrance,
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report Ad is failed to show
 
@@ -273,18 +271,18 @@ class DTAdReport(_DTApi):
 
     def report_close(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            location: str,
-            seq: str,
-            entrance: str,
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            location,
+            seq,
+            entrance,
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report Ad is closed
 
@@ -309,18 +307,18 @@ class DTAdReport(_DTApi):
 
     def report_click(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            location: str,
-            seq: str,
-            entrance: str,
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            location,
+            seq,
+            entrance,
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report Ad is clicked
 
@@ -345,18 +343,18 @@ class DTAdReport(_DTApi):
 
     def report_rewarded(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            location: str,
-            seq: str,
-            entrance: str,
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            location,
+            seq,
+            entrance,
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report rewarded from Ad
 
@@ -381,18 +379,18 @@ class DTAdReport(_DTApi):
 
     def report_conversion_by_click(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            location: str,
-            seq: str,
-            entrance: str,
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            location,
+            seq,
+            entrance,
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report conversion by clicking
 
@@ -417,18 +415,18 @@ class DTAdReport(_DTApi):
 
     def report_conversion_by_left_app(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            location: str,
-            seq: str,
-            entrance: str,
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            location,
+            seq,
+            entrance,
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report conversion by leaving app
 
@@ -453,18 +451,18 @@ class DTAdReport(_DTApi):
 
     def report_conversion_by_rewarded(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            location: str,
-            seq: str,
-            entrance: str,
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            location,
+            seq,
+            entrance,
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report conversion by rewarded
 
@@ -489,19 +487,19 @@ class DTAdReport(_DTApi):
 
     def report_paid(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            seq: str,
-            value: float,
-            currency: str,
-            precision: str,
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            seq,
+            value,
+            currency,
+            precision,
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report the value from displaying Ad
 
@@ -528,19 +526,19 @@ class DTAdReport(_DTApi):
 
     def report_paid_by_country(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            seq: str,
-            value: float,
-            precision: str,
-            country: str,
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            seq,
+            value,
+            precision,
+            country,
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report the value from displaying Ad
 
@@ -567,18 +565,18 @@ class DTAdReport(_DTApi):
 
     def report_left_app(
             self,
-            ad_id: str,
-            ad_type: Union[AdType, int],
-            platform: Union[AdPlatform, int],
-            location: str,
-            seq: str,
-            entrance: str,
-            mediation: Union[AdMediation, int] = AdMediation.IDLE,
-            mediation_id: str = "",
-            dt_id: str = None,
-            acid: str = None,
-            properties: Dict = None,
-            meta: Dict = None
+            ad_id,
+            ad_type,
+            platform,
+            location,
+            seq,
+            entrance,
+            mediation = AdMediation.IDLE,
+            mediation_id = "",
+            dt_id = None,
+            acid = None,
+            properties = None,
+            meta = None
     ):
         """ Report leaving the app
 
@@ -603,7 +601,7 @@ class DTAdReport(_DTApi):
 
     @staticmethod
     def __update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id,
-                            location="", entrance="", others=None) -> Dict:
+                            location="", entrance="", others=None):
         props = properties if properties is not None else {}
         props.update({
             "#ad_id": ad_id,
@@ -616,7 +614,7 @@ class DTAdReport(_DTApi):
             "#ad_entrance": entrance,
         })
 
-        if others is Dict:
+        if isinstance(others, dict):
             props.update(others)
 
         return props

@@ -1,6 +1,6 @@
+# -*- coding: utf-8 -*-
 import gzip
 import json
-from typing import Dict, Optional, Union, List, Callable, Any, Deque
 
 from urllib3.exceptions import MaxRetryError
 
@@ -41,12 +41,12 @@ class _HttpService(object):
     _simulate = None
     DEFAULT_SERVER_URL = "https://s2s.roiquery.com/sync"
 
-    def __init__(self, timeout=3000, retries: int = 3, compress=True):
+    def __init__(self, timeout=3000, retries=3, compress=True):
         self.timeout = timeout
         self.compress = compress
         self.retries = retries
 
-    def post_event(self, server_url: str, app_id: str, token: str, data, length) -> bool:
+    def post_event(self, server_url, app_id, token, data, length):
         """使用 Requests 发送数据给服务器
 
         Args:
@@ -63,14 +63,14 @@ class _HttpService(object):
 
         return self.__post(url=server_url, data=data, headers=headers)
 
-    def post_raw(self, url: str, data: Union[str, Dict], headers: Optional[Dict] = None) -> bool:
+    def post_raw(self, url, data, headers=None):
         try:
             return self.__post(url=url, data=data, headers=headers)
         except:
             Logger.exception("[HttpService] post_raw")
             return False
 
-    def __post(self, url: str, data: Union[str, Dict], headers: Optional[Dict] = None) -> bool:
+    def __post(self, url, data, headers=None):
         if headers is None:
             headers = {}
         if is_str(data):
@@ -122,7 +122,7 @@ class _HttpService(object):
     __MB = 1024 * 1024
 
     @staticmethod
-    def approx_split_data_by_mb(data: Union[List, Deque], to_str: Callable[[Any], str] = lambda x: x) -> List[List]:
+    def approx_split_data_by_mb(data, to_str=lambda x: x):
         """Divide the data to approximate size of 1mb (after compress, with dynamic compress rate)"""
         avg_compress_rate = _CounterMonitor["http_avg_compress_rate"].value
         Logger.debug("Current average compress rate: {}".format(avg_compress_rate))

@@ -53,11 +53,11 @@ class DTAnalytics(_DTApi):
         self.__analytics_utils = DTAnalyticsUtils(consumer, debug)
 
     @property
-    def ad(self) -> DTAdReport:
+    def ad(self):
         return self.__ad
 
     @property
-    def utils(self) -> DTAnalyticsUtils:
+    def utils(self):
         return self.__analytics_utils
 
     def set_dynamic_super_properties_tracker(self, dynamic_super_properties_tracker):
@@ -202,7 +202,7 @@ class DTAnalytics(_DTApi):
         self._add(dt_id=dt_id, acid=acid, send_type='track', event_name=event_name,
                   properties_add=all_properties)
 
-    def track_batch(self, *events: Event):
+    def track_batch(self, *events):
         """ Track a batch of events
 
         :param events: A list of events to track.

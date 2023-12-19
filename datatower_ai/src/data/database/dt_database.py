@@ -1,9 +1,7 @@
 import logging
 import sqlite3
-from sqlite3 import Cursor, OperationalError
-from typing import Callable, Any, Optional
+from sqlite3 import OperationalError
 
-from datatower_ai.src.data.database.config_dao import DTConfigDao
 from datatower_ai.src.data.database.event_dao import DTEventDao
 from datatower_ai.src.util.logger import Logger
 from datatower_ai.src.util.performance.time_monitor import TimeMonitor
@@ -29,14 +27,13 @@ class _DTDatabaseBase:
     2. add its creator to __on_create()
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name):
         self.__conn = sqlite3.connect(name, check_same_thread=False)
         self.__swmr_lock = SingleWriteMultiReadLock()
         self.__db_file_lock = FileLock(name + ".lock")
 
         # Place DAOs below
         self.event_dao = DTEventDao(self.do_write, self.do_read)
-        self.configs_dao = DTConfigDao(self.__conn)
         # Place DAOs above
 
         self.__init_db()
@@ -64,29 +61,28 @@ class _DTDatabaseBase:
         cursor.close()
 
     @staticmethod
-    def __on_create(cursor: Cursor, version: int):
+    def __on_create(cursor, version):
         Logger.log("DT-DB, on_create: %d" % version, logging.DEBUG)
 
         # Place DAO creator below
         DTEventDao.create(cursor)
-        DTConfigDao.create(cursor)
         # Place DAO creator above
 
         Logger.log("DT-DB, on_create: %d, finished" % version, logging.DEBUG)
 
     @staticmethod
-    def __on_upgrade(cursor: Cursor, crt_version: int, target_version: int) -> bool:
+    def __on_upgrade(cursor, crt_version, target_version):
         Logger.log("DT-DB, on_upgrade: %d -> %d" % (crt_version, target_version), logging.DEBUG)
         # no need to implement yet
         return True
 
     @staticmethod
-    def __on_downgrade(cursor: Cursor, crt_version: int, target_version: int) -> bool:
+    def __on_downgrade(cursor, crt_version, target_version):
         Logger.log("DT-DB, on_downgrade: %d -> %d" % (crt_version, target_version), logging.DEBUG)
         # no need to implement yet
         return True
 
-    def get_version(self) -> int:
+    def get_version(self):
         """Get current database version
 
         :return: Current database version
@@ -97,12 +93,12 @@ class _DTDatabaseBase:
         c.close()
         return result
 
-    def __set_version(self, version: int, cursor: sqlite3.Cursor, commit: bool = True):
+    def __set_version(self, version, cursor, commit=True):
         cursor.execute("PRAGMA user_version = %d;" % version)
         if commit:
             self.__conn.commit()
 
-    def do_write(self, func: Callable[[Cursor], Any]) -> Optional[Any]:
+    def do_write(self, func):
         """Only one write and no read(s) is allowed simultaneously
 
         Use this method to insert/update/delete data if using this Database in concurrent env.
@@ -124,7 +120,7 @@ class _DTDatabaseBase:
             self.__db_file_lock.release()
         return result
 
-    def do_read(self, func: Callable[[Cursor], Any]) -> Optional[Any]:
+    def do_read(self, func):
         """Allows multiple read and no write at the sametime
 
         Use this method to query data if using this Database in concurrent env.
@@ -150,12 +146,12 @@ class _DTDatabase(Singleton):
     def __init__(self):
         self.__instances = {}
 
-    def get(self, name: str) -> _DTDatabaseBase:
+    def get(self, name):
         if name not in self.__instances:
             # "datatower_ai.db"
             self.__instances[name] = _DTDatabaseBase(name)
         return self.__instances[name]
 
-    def get_by_app_id(self, app_id: str) -> _DTDatabaseBase:
+    def get_by_app_id(self, app_id):
         return self.get("datatower_ai_{}.db".format(app_id))
 

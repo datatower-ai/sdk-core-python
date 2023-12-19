@@ -1,7 +1,6 @@
 import logging
 import time
 from threading import Semaphore
-from typing import Dict, Tuple, Callable, Optional
 
 from datatower_ai.src.util.logger import Logger
 
@@ -10,14 +9,14 @@ from datatower_ai.src.util.singleton import Singleton
 
 class TmTimer(object):
     def __init__(self,
-                 key: Optional[str] = None,
-                 record_func: Optional[Callable[[str, float], None]] = None
+                 key=None,
+                 record_func=None
                  ):
         """This timer will automatically be started when TimeMonitor().start called"""
         self.__key = key
         self.__total_time = 0
         self.__start_time = time.time()
-        self.__status = 0     # 0: started, 1: paused, 2: stopped
+        self.__status = 0     # 0, 1, 2: stopped
         self.__record_func = record_func
 
     def pause(self):
@@ -38,7 +37,7 @@ class TmTimer(object):
         else:
             Logger.warning("[TimeMonitor] Timer resume is called (\"%s\") but the timer is not paused (%d)!" % (self.__key, self.__status))
 
-    def stop(self, one_shot: bool = True) -> float:
+    def stop(self, one_shot = True):
         """Get current time used from start to stop except pausing gap in milliseconds, -1 if such index not start yet.
 
         :param one_shot: Only use once. If True, will not be saved and not track further state (e.g. sum, avg).
@@ -56,7 +55,7 @@ class TmTimer(object):
             self.__record_func(self.__key, self.__total_time)
         return self.__total_time * 1000
 
-    def peek(self) -> float:
+    def peek(self):
         """Peek the current time elapsed in milliseconds.
         """
         if self.__status == 0:
@@ -66,8 +65,8 @@ class TmTimer(object):
 
 
 class ContextTmTimer(TmTimer):
-    def __init__(self, key: Optional[str] = None, record_func: Optional[Callable[[str, float], None]] = None,
-                 one_shot: bool = True):
+    def __init__(self, key=None, record_func=None,
+                 one_shot = True):
         super(ContextTmTimer, self).__init__(key=key, record_func=record_func)
         self.__one_shot = one_shot
 
@@ -99,14 +98,14 @@ class TimeMonitor(Singleton):
     def __init__(self):
         self.__table = {}     # {"key": (avg, count)}
 
-    def start(self, key: str) -> TmTimer:
+    def start(self, key):
         return TmTimer(key, self._record)
 
-    def start_with(self, key: str, one_shot: bool = False) -> ContextTmTimer:
+    def start_with(self, key, one_shot = False):
         return ContextTmTimer(key, self._record, one_shot)
 
-    def _record(self, key: str, elapsed: float):
-        is_get = TimeMonitor.__sem.acquire(timeout=0.01)
+    def _record(self, key, elapsed):
+        is_get = TimeMonitor.__sem.acquire()
         if not is_get:
             return
         tp = self.__table.get(key, (0, 0))
@@ -114,7 +113,7 @@ class TimeMonitor(Singleton):
         self.__table[key] = new_tp
         TimeMonitor.__sem.release()
 
-    def get_sum(self, key: str) -> float:
+    def get_sum(self, key):
         """Sum of time performance of such index in milliseconds,
         -1 if such index is not counted yet
         """
@@ -122,7 +121,7 @@ class TimeMonitor(Singleton):
             return -1
         return self.__table[key][0] * self.__table[key][1] * 1000
 
-    def get_avg(self, key: str) -> float:
+    def get_avg(self, key):
         """Average of time performance of such index in milliseconds,
         -1 if such index is not counted yet
         """
@@ -130,12 +129,12 @@ class TimeMonitor(Singleton):
             return -1
         return self.__table[key][0] * 1000
 
-    def get_count(self, key: str) -> int:
+    def get_count(self, key):
         if key not in self.__table:
             return -1
         return self.__table[key][1]
 
-    def delete(self, key: str) -> Tuple:
+    def delete(self, key):
         if key not in self.__table:
             return ()
         tp = self.__table[key]

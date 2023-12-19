@@ -1,11 +1,15 @@
+import abc
 import logging
 import random
+import sys
 import time
-from abc import ABC, abstractmethod
-from typing import Callable, Tuple
+from abc import abstractmethod
+if sys.version_info >= (3, 4):
+    ABC = abc.ABC
+else:
+    ABC = abc.ABCMeta('ABC', (), {})
 
 from datatower_ai.src.util.logger import Logger
-from future.types.newint import long
 
 from threading import Thread, Condition, Semaphore, Event
 
@@ -22,7 +26,7 @@ class Task(ABC):
     def run(self):
         pass
 
-    def fallback(self, reason: Tuple[int, str]):
+    def fallback(self, reason):
         pass
 
     @staticmethod
@@ -31,10 +35,10 @@ class Task(ABC):
 
 
 class _Overtime:
-    def __init__(self, time_allowed: float):
+    def __init__(self, time_allowed):
         self.__time_allowed = time_allowed
 
-    def is_overtime(self, start_time: float):
+    def is_overtime(self, start_time):
         return time.time() - start_time > self.__time_allowed
 
     def __lt__(self, other):
@@ -55,10 +59,10 @@ class Worker(Thread):
     """Thread executing task from given task queue"""
 
     def __init__(
-            self, name: str, idx: int, tasks: queue.Queue, condition: Condition, semaphore: Semaphore,
-            barrier: Event, barrier_timeout_ms: long = 100,
-            allowed_overtime_ms: long = -1,
-            on_terminate: Callable[[int], None] = lambda _: None,
+            self, name, idx, tasks, condition, semaphore,
+            barrier, barrier_timeout_ms=100,
+            allowed_overtime_ms=-1,
+            on_terminate=lambda _: None,
     ):
         Thread.__init__(self, name=name)
         self.__idx = idx
@@ -102,7 +106,7 @@ class Worker(Thread):
                 self.__on_terminate(self.__idx)
                 break
 
-    def __handle_empty_tasks(self) -> bool:
+    def __handle_empty_tasks(self):
         self.__condition.acquire()
         if self.__allowed_overtime >= 0:
             # Logger.debug(
@@ -120,7 +124,7 @@ class Worker(Thread):
         self.__condition.release()
         return False
 
-    def __handle_task(self, target_time: float, task) -> bool:
+    def __handle_task(self, target_time, task):
         """When tasks is not empty
 
         :returns: Is need to halt this worker
@@ -191,13 +195,13 @@ class WorkerManager:
     """
 
     def __init__(self,
-                 name: str,
-                 size: int = 1,
-                 keep_alive_ms: long = -1,
-                 on_all_workers_stop: Callable = lambda: (),
-                 on_terminate: Callable = lambda: (),
-                 on_all_worker_revived: Callable = lambda: (),
-                 on_start: Callable = lambda: (),
+                 name,
+                 size = 1,
+                 keep_alive_ms = -1,
+                 on_all_workers_stop = lambda: (),
+                 on_terminate = lambda: (),
+                 on_all_worker_revived = lambda: (),
+                 on_start = lambda: (),
                  ):
         """Creating a WorkerManager with fix number of workers
 
@@ -227,7 +231,7 @@ class WorkerManager:
     def __len__(self):
         return self.__size
 
-    def __create_worker(self, idx: int) -> Worker:
+    def __create_worker(self, idx):
         return Worker(
             "%s#%d" % (self.__name, idx), idx, self.__queue, self.__condition, self.__semaphore, self.__barrier,
             barrier_timeout_ms=100,
@@ -268,7 +272,7 @@ class WorkerManager:
             Logger.debug("[%s] Awakened all workers" % self)
             self.__on_all_worker_revived()
 
-    def execute(self, task, delay: int = 0) -> bool:
+    def execute(self, task, delay = 0):
         """Dispatch the task to workers.
 
         Will notify a worker to prevent the state of all worker is in wait.
@@ -319,7 +323,10 @@ class WorkerManager:
         self.__terminated = True
         self.__terminating = False
         self.__started = False
-        self.__queue.queue.clear()
+        try:
+            self.__queue.queue.clear()
+        except AttributeError:
+            del self.__queue.queue[:]
 
         self.__on_terminate()
         Logger.log("[%s] terminated!" % self, logging.DEBUG)

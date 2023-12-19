@@ -3,7 +3,7 @@ import json
 from datatower_ai import *
 
 
-def handle(dt: DTAnalytics, args):
+def handle(dt, args):
     n = args.n
     m = args.m
     jo = json.loads(args.json)

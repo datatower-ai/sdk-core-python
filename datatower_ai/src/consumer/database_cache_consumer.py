@@ -1,6 +1,5 @@
 import logging
 from threading import Semaphore
-from typing import Callable, List, Tuple
 
 from datatower_ai.src.consumer.abstract_consumer import _AbstractConsumer
 from datatower_ai.src.data.database.dt_database import _DTDatabase
@@ -18,11 +17,11 @@ from datatower_ai.src.util.performance.time_monitor import TimeMonitor
 
 
 class DatabaseCacheConsumer(_AbstractConsumer):
-    def __init__(self, app_id, token, server_url=_HttpService.DEFAULT_SERVER_URL, batch_size: int = 50,
-                 network_retries: int = 3, network_timeout: int = 3000, num_db_threads: int = 2,
-                 num_network_threads: int = 2, thread_keep_alive_ms: int = -1,
-                 cache_size: int = 5000,
-                 exceed_insertion_strategy: ExceedInsertionStrategy = ExceedInsertionStrategy.DELETE):
+    def __init__(self, app_id, token, server_url=_HttpService.DEFAULT_SERVER_URL, batch_size = 50,
+                 network_retries = 3, network_timeout = 3000, num_db_threads = 2,
+                 num_network_threads = 2, thread_keep_alive_ms = -1,
+                 cache_size = 5000,
+                 exceed_insertion_strategy = ExceedInsertionStrategy.DELETE):
         """Uploading with Database caching support, to prevent data loss.
 
         * Async
@@ -68,7 +67,7 @@ class DatabaseCacheConsumer(_AbstractConsumer):
     def get_app_id(self):
         return self.__app_id
 
-    def add(self, get_msg: Callable[[], List[str]]):
+    def add(self, get_msg):
         self.__db_wm.execute(lambda: self.__insert_to_db(get_msg, self.__cache_size, self.__exceed_insertion_strategy))
 
     def flush(self):
@@ -79,14 +78,14 @@ class DatabaseCacheConsumer(_AbstractConsumer):
         self.__db_wm.execute(lambda: self.__network_wm.terminate())
         self.__db_wm.terminate()
 
-    def __insert_to_db(self, get_data: Callable[[], List[str]], cache_size: int, strategy: ExceedInsertionStrategy):
+    def __insert_to_db(self, get_data, cache_size, strategy):
         data = get_data()
 
         events = [DTEventEntity(x, self.__app_id, self.__server_url, self.__token) for x in data]
 
         timer = TimeMonitor().start("UploadFromDbTask-insert")
         _DTDatabase().get_by_app_id(self.__app_id).event_dao.insert_batch(
-            *events, cache_size=cache_size, strategy=strategy
+            cache_size, strategy, *events
         )
         timer.stop(one_shot=False)
         _CounterMonitor["UploadFromDbTask-insert"] += len(events)
@@ -207,7 +206,7 @@ class _QueryFromDbTask(Task):
         self.__phase_end()
 
     @staticmethod
-    def query_entities(dao: DTEventDao, batch_size: int, offset: int = 0) -> List[DTEventEntity]:
+    def query_entities(dao, batch_size, offset = 0):
         monitor = TimeMonitor()
         timer = monitor.start("UploadFromDbTask-query")
         if batch_size > 0 and offset >= 0:
@@ -218,7 +217,7 @@ class _QueryFromDbTask(Task):
         _CounterMonitor["UploadFromDbTask-query"] += len(entities)
         return entities
 
-    def __after_upload(self, success: bool, ids: List[Tuple[int]]):
+    def __after_upload(self, success, ids):
         """Ensure all uploading is done whatever succeed or failed, before calling phase end"""
         if success:
             _CounterMonitor["UploadFromDbTask-success"] += len(ids)
@@ -240,7 +239,7 @@ class _QueryFromDbTask(Task):
             _CounterMonitor["UploadFromDbTask-success"], _CounterMonitor["UploadFromDbTask-fail"]
         ), logging.INFO)
 
-    def __phase_end(self, no_need_upload: bool = False):
+    def __phase_end(self, no_need_upload = False):
         #Logger.debug("[ReadFromDbAndUpload] Phase finished, has_pending: {}".format(_QueryFromDbTask.__has_pending_task))
         _QueryFromDbTask.__sem.acquire()
         _QueryFromDbTask.__is_doing = False
@@ -255,7 +254,7 @@ class _QueryFromDbTask(Task):
 
 
 class _UploadTask(Task):
-    def __init__(self, http_service: _HttpService, entities, after_upload: Callable[[bool, List[Tuple[int]]], None]):
+    def __init__(self, http_service, entities, after_upload):
         self.__http_service = http_service
         self.__entities = entities
         self.__after_upload = after_upload
@@ -294,7 +293,7 @@ class _UploadTask(Task):
 
         self.__after_upload(is_success, [(x.identifier,) for x in self.__entities])
 
-    def fallback(self, reason: Tuple[int, str]):
+    def fallback(self, reason):
         Logger.warning(
             "[UploadTask] Task is not run, reason: \"{}\". This batch of data (length: {}) will be retained ".format(
                 reason[1], len(self.__entities)

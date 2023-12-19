@@ -1,8 +1,4 @@
 import time
-from sqlite3 import Cursor
-from typing import List, Tuple, Callable, Any, Optional
-
-from future.types.newint import long
 
 from datatower_ai.src.strategy.exceed_insertion_strategy import ExceedInsertionStrategy
 from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor
@@ -12,7 +8,7 @@ _table_name = "events"
 
 
 class DTEventEntity:
-    def __init__(self, data: str, app_id: str, server_url: str, token: str, created_at: long = time.time(), identifier: long = -1):
+    def __init__(self, data, app_id, server_url, token, created_at = time.time(), identifier = -1):
         self.data = data
         self.app_id = app_id
         self.server_url = server_url
@@ -42,7 +38,7 @@ class DTEventEntity:
         """ % _table_name
 
     @staticmethod
-    def query_batch_unquired_statement(limit: int, offset: int):
+    def query_batch_unquired_statement(limit, offset):
         return """
             SELECT _id, data, app_id, server_url, token, created_at FROM %s 
             WHERE queried = 0 
@@ -62,7 +58,7 @@ class DTEventEntity:
         """ % _table_name
 
     @staticmethod
-    def set_queried_statement(queried: bool):
+    def set_queried_statement(queried):
         return """
             UPDATE %s 
             SET queried = %d
@@ -83,7 +79,7 @@ class DTEventEntity:
         """ % (_table_name, self.data, self.app_id, self.server_url, self.token, self.created_at)
 
     @staticmethod
-    def delete_oldest_statement(num: int = 1):
+    def delete_oldest_statement(num = 1):
         return """
         DELETE FROM %s WHERE _id IN (
             SELECT _id FROM %s ORDER BY created_at LIMIT %d
@@ -103,7 +99,7 @@ class DTEventEntity:
         )
 
 
-def _from_query_result(raw: List[tuple]) -> List[DTEventEntity]:
+def _from_query_result(raw):
     result = []
     for row in raw:
         result.append(DTEventEntity(row[1], row[2], row[3], row[4], row[5], identifier=row[0]))
@@ -113,22 +109,22 @@ def _from_query_result(raw: List[tuple]) -> List[DTEventEntity]:
 class DTEventDao:
     def __init__(
             self,
-            write_func: Callable[[Callable[[Cursor], Any]], Optional[Any]],
-            read_func: Callable[[Callable[[Cursor], Any]], Optional[Any]]
+            write_func,
+            read_func
     ):
         self.__write_func = write_func
         self.__read_func = read_func
         self.__virtual_size = -1    # get db len at first run.
 
     @staticmethod
-    def create(cursor: Cursor):
+    def create(cursor):
         """Create table
 
         :param cursor: Database cursor
         """
         cursor.execute(DTEventEntity.create_statement())
 
-    def insert(self, entity: DTEventEntity, cache_size: int, strategy: ExceedInsertionStrategy):
+    def insert(self, entity, cache_size, strategy):
         """Insert single entity to producer table
 
         :param entity: DTEventEntity
@@ -137,7 +133,7 @@ class DTEventDao:
         """
         self.__write_func(lambda c: self.__insert_inner(c, entity, cache_size=cache_size, strategy=strategy))
 
-    def __insert_inner(self, c: Cursor, entity: DTEventEntity, cache_size: int, strategy: ExceedInsertionStrategy):
+    def __insert_inner(self, c, entity, cache_size, strategy):
         (beg, end) = self.__get_insert_range(c, 1, cache_size, strategy)
 
         self.invalidate_virtual_size(c)
@@ -145,17 +141,16 @@ class DTEventDao:
             c.execute(entity.insert_statement())
             self.__virtual_size += 1
 
-    def insert_batch(self, *entities: DTEventEntity, cache_size: int, strategy: ExceedInsertionStrategy):
+    def insert_batch(self, cache_size, strategy, *entities):
         """Insert batch of entities to table
 
         :param entities: DTEventEntities
         :param cache_size:
         :param strategy:
         """
-        self.__write_func(lambda c: self.__insert_batch_inner(c, *entities, cache_size=cache_size, strategy=strategy))
+        self.__write_func(lambda c: self.__insert_batch_inner(c, cache_size, strategy, *entities))
 
-    def __insert_batch_inner(self, c: Cursor, *entities: DTEventEntity,
-                             cache_size: int, strategy: ExceedInsertionStrategy):
+    def __insert_batch_inner(self, c, cache_size, strategy, *entities):
         (beg, end) = self.__get_insert_range(c, len(entities), cache_size, strategy)
 
         self.invalidate_virtual_size(c)
@@ -163,8 +158,8 @@ class DTEventDao:
             c.execute(entities[i].insert_statement())
         self.__virtual_size += end - beg
 
-    def __get_insert_range(self, c: Cursor, entities_size: int,
-                           cache_size: int, strategy: ExceedInsertionStrategy) -> (int, int):
+    def __get_insert_range(self, c, entities_size,
+                           cache_size, strategy):
         """ [int, int) """
         new_size = entities_size + self.__virtual_size
         exceed = new_size - cache_size
@@ -183,7 +178,7 @@ class DTEventDao:
                 return 0, entities_size
         return 0, entities_size
 
-    def query_all(self) -> List[DTEventEntity]:
+    def query_all(self):
         """Query all entities in table
 
         :return: all entities
@@ -194,13 +189,13 @@ class DTEventDao:
         return result
 
     @staticmethod
-    def __query_all_inner(c: Cursor):
+    def __query_all_inner(c):
         c.execute(DTEventEntity.query_all_unqueried_statement())
         result = c.fetchall()
         DTEventDao.__set_to_queried(c, *map(lambda x: (x[0],), result))
         return _from_query_result(result)
 
-    def query_batch(self, limit: int, offset: int = 0) -> List[DTEventEntity]:
+    def query_batch(self, limit, offset = 0):
         """Query `limit` entities starting from `offset`'s row in table
 
         :return: `limit` entities
@@ -211,32 +206,32 @@ class DTEventDao:
         return result
 
     @staticmethod
-    def __query_batch_inner(c: Cursor, limit: int, offset: int):
+    def __query_batch_inner(c, limit, offset):
         c.execute(DTEventEntity.query_batch_unquired_statement(limit, offset))
         result = c.fetchall()
         DTEventDao.__set_to_queried(c, *map(lambda x: (x[0],), result))
         return _from_query_result(result)
 
     @staticmethod
-    def __set_to_queried(c: Cursor, *ids: Tuple):
+    def __set_to_queried(c, *ids):
         timer = TimeMonitor().start_with("event_dao-set_queried")
         c.executemany(DTEventEntity.set_queried_statement(True), ids)
         timer.stop(one_shot=False)
         _CounterMonitor["event_dao-set_queried"] += len(ids)
 
-    def restore_to_unqueried(self, ids: List[Tuple]):
+    def restore_to_unqueried(self, ids):
         self.__write_func(lambda c: self.__restore_to_unqueried_inner(c, ids))
 
     @staticmethod
-    def __restore_to_unqueried_inner(c: Cursor, ids: List[Tuple]):
+    def __restore_to_unqueried_inner(c, ids):
         c.executemany(DTEventEntity.set_queried_statement(False), ids)
 
-    def delete_by_ids(self, ids: List[Tuple]):
+    def delete_by_ids(self, ids):
         """Delete all entities in table
         """
         self.__write_func(lambda c: self.__delete_by_ids_inner(c, ids))
 
-    def __delete_by_ids_inner(self, c: Cursor, ids: List[Tuple]):
+    def __delete_by_ids_inner(self, c, ids):
         self.__virtual_size -= len(ids)
         c.executemany(DTEventEntity.delete_by_id_statement(), ids)
 
@@ -250,7 +245,7 @@ class DTEventDao:
         # Uses virtual size instead of querying actual size (I/O) to saving time.
         return self.__virtual_size
 
-    def invalidate_virtual_size(self, c: Optional[Cursor] = None, force: bool = False):
+    def invalidate_virtual_size(self, c=None, force=False):
         if force or self.__virtual_size < 0:
             result = self.__size(c) if c is not None else self.__read_func(self.__size)
             if result is None:
@@ -259,7 +254,7 @@ class DTEventDao:
                 self.__virtual_size = max(0, result)
 
     @staticmethod
-    def __size(c: Cursor):
+    def __size(c):
         c.execute(DTEventEntity.get_unqueried_size_statement())
         result = c.fetchone()
         return result[0]

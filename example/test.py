@@ -10,22 +10,22 @@ if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.append(BASE_DIR)
 
-    # dt = DTAnalytics(
-    #     DatabaseCacheConsumer(app_id="app_id_xxxx",
-    #                           token="xxxxxxxxxxxxxxxxxxxxxxx",
-    #                           server_url="https://test.roiqueryxxx.com/sync",
-    #                           thread_keep_alive_ms=1000,
-    #                           exceed_insertion_strategy=ExceedInsertionStrategy.IGNORE),
-    #     debug=True, log_level=logging.DEBUG
-    # )
-
     dt = DTAnalytics(
-        AsyncBatchConsumer(app_id="app_id_xxxx",
-                           token="xxxxxxxxxxxxxxxxxxxxxxx",
-                           server_url="https://test.roiqueryxxx.com/sync",
-                           close_retry=0),
+        DatabaseCacheConsumer(app_id="app_id_xxxx",
+                              token="xxxxxxxxxxxxxxxxxxxxxxx",
+                              server_url="https://test.roiqueryxxx.com/sync",
+                              thread_keep_alive_ms=1000,
+                              exceed_insertion_strategy=ExceedInsertionStrategy.IGNORE),
         debug=True, log_level=logging.DEBUG
     )
+
+    # dt = DTAnalytics(
+    #     AsyncBatchConsumer(app_id="app_id_xxxx",
+    #                        token="xxxxxxxxxxxxxxxxxxxxxxx",
+    #                        server_url="https://test.roiqueryxxx.com/sync",
+    #                        close_retry=0),
+    #     debug=True, log_level=logging.DEBUG
+    # )
 
     # 查看日志
     # 需要初始化logging
@@ -51,7 +51,7 @@ if __name__ == "__main__":
         "order": "订单号xxx"  # 自定义内容
     }
     _HttpService._simulate = 10
-    n = 10
+    n = 1000
     # 设置事件数据
     for _ in range(n):
         dt.track(dt_id="aaaa", acid='ddd$fff', event_name="purchase", properties=properties, meta=meta)

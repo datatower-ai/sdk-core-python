@@ -1,6 +1,4 @@
-from typing import Callable, List
-
-
+# -*- coding: utf-8 -*-
 class _AbstractConsumer(object):
     """
         Consumer抽象类
@@ -8,7 +6,7 @@ class _AbstractConsumer(object):
     def get_app_id(self):
         raise NotImplementedError
 
-    def add(self, get_msg: Callable[[], List[str]]):
+    def add(self, get_msg):
         raise NotImplementedError
 
     def flush(self):
