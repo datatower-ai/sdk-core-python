@@ -1,22 +1,23 @@
 import datetime
 import re
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple, Optional
 
 from future.types.newint import long
 
 from datatower_ai import DTMetaDataException, DTIllegalDataException
 
-__META = ["#app_id", "#bundle_id", "#android_id", "#gaid", "#dt_id", "#acid", "#event_time", "#event_syn"]
+__META = (("#app_id", str), ("#bundle_id", str), ("#android_id", str), ("#gaid", str), ("#dt_id", str), ("#acid", str), ("#event_time", int), ("#event_syn", str))
 __COMPULSORY_META = ("#app_id", "#bundle_id", "#event_time", "#event_name", "#event_type", "#event_syn")
 __NAME_REGEX = re.compile(r"^[#$a-zA-Z][a-zA-Z0-9_]{0,63}$")
 
-__PRESET_PROPS_COMMON = ("$uid", "#dt_id", "#acid", "#event_syn", "#session_id", "#device_manufacturer", "#event_name", "#is_foreground", "#android_id", "#gaid", "#mcc", "#mnc", "#os_country_code", "#os_lang_code", "#event_time", "#bundle_id", "#app_version_code", "#app_version_name", "#sdk_type", "#sdk_version_name", "#os", "#os_version_name", "#os_version_code", "#device_brand", "#device_model", "#build_device", "#screen_height", "#screen_width", "#memory_used", "#storage_used", "#network_type", "#simulator", "#fps", "$ip", "$country_code", "$server_time")
-__PRESET_PROPS_AD = ("#ad_seq", "#ad_id", "#ad_type_code", "#ad_platform_code", "#ad_entrance", "#ad_result", "#ad_duration", "#ad_location", "#errorCode", "#errorMessage", "#ad_value", "#ad_currency", "#ad_precision", "#ad_country_code", "#ad_mediation_code", "#ad_mediation_id", "#ad_conversion_source", "#ad_click_gap", "#ad_return_gap", "#error_code", "#error_message", "#load_result", "#load_duration")
+__PRESET_PROPS_COMMON = (("$uid", str), ("#dt_id", str), ("#acid", str), ("#event_syn", str), ("#session_id", str), ("#device_manufacturer", str), ("#event_name", str), ("#is_foreground", bool), ("#android_id", str), ("#gaid", str), ("#mcc", str), ("#mnc", str), ("#os_country_code", str), ("#os_lang_code", str), ("#event_time", int), ("#bundle_id", str), ("#app_version_code", int), ("#app_version_name", str), ("#sdk_type", str), ("#sdk_version_name", str), ("#os", str), ("#os_version_name", str), ("#os_version_code", int), ("#device_brand", str), ("#device_model", str), ("#build_device", str), ("#screen_height", int), ("#screen_width", int), ("#memory_used", str), ("#storage_used", str), ("#network_type", str), ("#simulator", bool), ("#fps", int), ("$ip", str), ("$country_code", str), ("$server_time", int))
+__PRESET_PROPS_AD = (("#ad_seq", str), ("#ad_id", str), ("#ad_type_code", str), ("#ad_platform_code", str), ("#ad_entrance", str), ("#ad_result", bool), ("#ad_duration", int), ("#ad_location", str), ("#errorCode", int), ("#errorMessage", str), ("#ad_value", str), ("#ad_currency", str), ("#ad_precision", str), ("#ad_country_code", str), ("#ad_mediation_code", str), ("#ad_mediation_id", str), ("#ad_conversion_source", str), ("#ad_click_gap", str), ("#ad_return_gap", str), ("#error_code", str), ("#error_message", str), ("#load_result", str), ("#load_duration", str))
+__PRESET_PROPS_IAS = (("#ias_seq", str), ("#ias_original_order", str), ("#ias_order", str), ("#ias_sku", str), ("#ias_price", float), ("#ias_currency", str), ("$ias_price_exchange", float))
 __PRESET_EVENT = {
-    "#app_install": ("#referrer_url", "#referrer_click_time", "#app_install_time", "#instant_experience_launched", "#failed_reason", "#cnl"),
-    "#session_start": ("#is_first_time", "#resume_from_background", "#start_reason"),
-    "$app_install": ("$network_id", "$network_name", "$tracker_id", "$tracker_name", "$channel_id", "$channel_sub_id", "$channel_ssub_id", "$channel_name", "$channel_sub_name", "$channel_ssub_name", "$channel_platform_id", "$channel_platform_name", "$attribution_source", "$fraud_network_id", "$original_tracker_id", "$original_tracker_name", "$original_network_id", "$original_network_name"),
-    "#session_end": ("#session_duration",),
+    "#app_install": (("#referrer_url", str), ("#referrer_click_time", int), ("#app_install_time", int), ("#instant_experience_launched", bool), ("#failed_reason", str), ("#cnl", str)),
+    "#session_start": (("#is_first_time", bool), ("#resume_from_background", bool), ("#start_reason", str)),
+    "$app_install": (("$network_id", str), ("$network_name", str), ("$tracker_id", str), ("$tracker_name", str), ("$channel_id", str), ("$channel_sub_id", str), ("$channel_ssub_id", str), ("$channel_name", str), ("$channel_sub_name", str), ("$channel_ssub_name", str), ("$channel_platform_id", int), ("$channel_platform_name", str), ("$attribution_source", str), ("$fraud_network_id", str), ("$original_tracker_id", str), ("$original_tracker_name", str), ("$original_network_id", str), ("$original_network_name", str)),
+    "#session_end": (("#session_duration", int),),
     "#ad_load_begin": __PRESET_PROPS_AD,
     "#ad_load_end": __PRESET_PROPS_AD,
     "#ad_to_show": __PRESET_PROPS_AD,
@@ -27,17 +28,18 @@ __PRESET_EVENT = {
     "#ad_left_app": __PRESET_PROPS_AD,
     "#ad_return_app": __PRESET_PROPS_AD,
     "#ad_rewarded": __PRESET_PROPS_AD,
-    "#ad_conversion": __PRESET_PROPS_AD,
+    "#ad_conversion": __PRESET_PROPS_AD + (("$earnings", float),),
     "#ad_paid": __PRESET_PROPS_AD,
-    "#iap_purchase_success": ("#iap_order", "#iap_sku", "#iap_price", "#iap_currency", "$iap_price_exchange"),
-    "#ias_subscribe_success": ("#ias_original_order", "#ias_order", "#ias_sku", "#ias_price", "#ias_currency", "$ias_price_exchange")
+    "#iap_purchase_success": (("#iap_order", str), ("#iap_sku", str), ("#iap_price", float), ("#iap_currency", str), ("$iap_price_exchange", float)),
+    "#ias_subscribe_success": __PRESET_PROPS_IAS,
+    "#ias_subscribe_notify": __PRESET_PROPS_IAS + (("$original_ios_notification_type", str))
 }
 
 
 def move_meta(source_properties, target, delete: bool = True):
     if source_properties is None:
         return
-    for key in __META:
+    for (key, _) in __META:
         if key in source_properties.keys():
             target[key] = source_properties.get(key)
             if delete:
@@ -48,6 +50,10 @@ def extra_verify(dictionary: Dict[str, Any]):
     for prop in __COMPULSORY_META:
         if prop not in dictionary:
             raise DTMetaDataException("Required meta property \"{}\" is missing!".format(prop))
+        tp = next((x for x in __META if x[0] == prop), None)
+        if tp is not None and not isinstance(dictionary[prop], tp[1]):
+            raise DTMetaDataException("Type meta property \"{}\" ({}) is not valid, should be {}!".format(
+                prop, type(dictionary[prop]), tp))
 
     if len(dictionary.get("#app_id", "")) == 0:
         raise DTMetaDataException("app_id cannot missing or be empty!")
@@ -77,9 +83,16 @@ def __verify_preset_properties(event_name: str, properties):
     if not isinstance(properties, Dict):
         raise DTIllegalDataException("Type of \"properties\" of preset event should be Dict!")
     for (key, value) in properties.items():
-        if key not in __PRESET_EVENT[event_name] and key not in __PRESET_PROPS_COMMON:
+        tp = __find_prop_in_preset_event(event_name, key)
+        if tp is None:
             raise DTIllegalDataException(
-                "key of property (\"{}\") is not valid and out of scope for preset event (\"{}\")!".format(key, event_name)
+                "key of property (\"{}\") is out of scope for preset event (\"{}\")!".format(
+                    key, event_name)
+            )
+        if not isinstance(value, tp[1]):
+            raise DTIllegalDataException(
+                "The type of value for property \"{}\" is not valid (Given: {}, Expect: {})!".format(
+                    key, type(value), tp[1])
             )
 
 
@@ -122,3 +135,10 @@ def __verify_properties_value(value, msg):
 def __verify_properties_key(key):
     if not __NAME_REGEX.fullmatch(key):
         raise DTIllegalDataException("")
+
+
+def __find_prop_in_preset_event(event_name, prop_name) -> Optional[Tuple]:
+    props = __PRESET_EVENT.get(event_name, ())
+    if len(props) == 0:
+        return None
+    return next((x for x in props if x[0] == prop_name), None)

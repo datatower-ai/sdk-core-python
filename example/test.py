@@ -51,7 +51,7 @@ if __name__ == "__main__":
         "order": "订单号xxx"  # 自定义内容
     }
     _HttpService._simulate = 10
-    n = 10000
+    n = 10
     # 设置事件数据
     for _ in range(n):
         dt.track(dt_id="aaaa", acid='ddd$fff', event_name="purchase", properties=properties, meta=meta)

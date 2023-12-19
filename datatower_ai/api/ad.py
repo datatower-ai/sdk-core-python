@@ -69,15 +69,15 @@ class AdMediation(Enum):
     ADMOB = 7
 
 
-def _get_value(raw: Union[AdType, AdPlatform, AdMediation, int]) -> int:
+def _get_value(raw: Union[AdType, AdPlatform, AdMediation, int]) -> str:
     if raw is int:
-        return raw
+        return str(raw)
     if isinstance(raw, (AdType, AdPlatform, AdMediation)):
         try:
-            return raw.value
+            return str(raw.value)
         except:
             # Compatible to py 2.7 which has no .value property.
-            return raw
+            return str(raw)
 
 
 class DTAdReport(_DTApi):
