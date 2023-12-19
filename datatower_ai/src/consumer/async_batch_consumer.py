@@ -131,7 +131,6 @@ class AsyncBatchConsumer(_AbstractConsumer):
                 success = False
                 timer = TimeMonitor().start("async_batch-upload")
                 try:
-                    Logger.warning("len: {}, split: {}".format(len(split), split))
                     success = self.__http_service.post_event(
                         self.__server_url, self.__app_id, self.__token, '[' + ','.join(split) + ']', str(len(split))
                     )

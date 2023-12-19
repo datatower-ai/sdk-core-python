@@ -7,7 +7,7 @@ from future.types.newint import long
 from datatower_ai import DTMetaDataException, DTIllegalDataException
 
 __META = ["#app_id", "#bundle_id", "#android_id", "#gaid", "#dt_id", "#acid", "#event_time", "#event_syn"]
-__COMPULSORY_META = ("#bundle_id",)
+__COMPULSORY_META = ("#app_id", "#bundle_id", "#event_time", "#event_name", "#event_type", "#event_syn")
 __NAME_REGEX = re.compile(r"^[#$a-zA-Z][a-zA-Z0-9_]{0,63}$")
 
 __PRESET_PROPS_COMMON = ("$uid", "#dt_id", "#acid", "#event_syn", "#session_id", "#device_manufacturer", "#event_name", "#is_foreground", "#android_id", "#gaid", "#mcc", "#mnc", "#os_country_code", "#os_lang_code", "#event_time", "#bundle_id", "#app_version_code", "#app_version_name", "#sdk_type", "#sdk_version_name", "#os", "#os_version_name", "#os_version_code", "#device_brand", "#device_model", "#build_device", "#screen_height", "#screen_width", "#memory_used", "#storage_used", "#network_type", "#simulator", "#fps", "$ip", "$country_code", "$server_time")
@@ -85,9 +85,9 @@ def __verify_preset_properties(event_name: str, properties):
 
 def __verify_properties(event_name: str, properties):
     if event_name == "#user_append" or event_name == "#user_uniq_append":
-        __verify_properties_4_list(properties, event_name)
+        __verify_properties_value_4_list(properties, event_name)
     elif event_name == "#user_add":
-        __verify_properties_4_number_list(properties, event_name)
+        __verify_properties_value_4_number(properties, event_name)
     else:
         for key, value in properties.items():
             __verify_properties_key(key)
@@ -97,20 +97,18 @@ def __verify_properties(event_name: str, properties):
             )
 
 
-def __verify_properties_4_list(properties, event_name):
-    if not isinstance(properties, List):
-        raise DTIllegalDataException("Type of properties for {} should be List".format(event_name))
-    for value in properties:
+def __verify_properties_value_4_list(properties, event_name):
+    for value in properties.values():
+        if not isinstance(value, List):
+            raise DTIllegalDataException("Type of properties for {} should be List".format(event_name))
         __verify_properties_value(
             value,
             "Type of value ({}, {}) is not supported!".format(type(value), value)
         )
 
 
-def __verify_properties_4_number_list(properties, event_name):
-    if not isinstance(properties, List):
-        raise DTIllegalDataException("Type of properties for {} should be List".format(event_name))
-    for value in properties:
+def __verify_properties_value_4_number(properties, event_name):
+    for value in properties.values():
         if not isinstance(value, (int, float, long)):
             raise DTIllegalDataException(
                 "Type of value ({}, {}) is not supported, should be a valid number!".format(type(value), value))

@@ -1,30 +1,19 @@
-"""Provides ability to run this package directly from cl without integrated to project."""
+"""Provides ability to run this package directly from __cl without integrated to project."""
 
 import argparse
-import json
 import logging
 import re
-import time
-from typing import Optional
 
 from datatower_ai import *
 from datatower_ai.__version__ import __version__
+import datatower_ai.__cl.user as user
+import datatower_ai.__cl.analytics as analytics
+import datatower_ai.__cl.raw_track as raw_tracker
+import datatower_ai.__cl.test as test
+import datatower_ai.__cl.ad as ad
 
 
-def _track(args):
-    print("Track")
-    print("name: {}".format(args.name))
-    print("properties: {}".format(args.properties))
-    json_obj = json.loads(args.properties)
-    dt.track(dt_id=json_obj.get("#dt_id", None), acid=json_obj.get("#acid", None), event_name=args.name, properties=json_obj)
-
-
-def _user_add(args):
-    print("User add")
-    print("a: {}".format(args.a))
-
-
-def _test(args):
+def _test(dt, args):
     print("Test")
     print("n: {}".format(args.n))
     from datatower_ai.src.service.http_service import _HttpService
@@ -35,7 +24,7 @@ def _test(args):
     dt.close()
 
 
-def _test_batch(args):
+def _test_batch(dt, args):
     print("Test")
     print("m: {}".format(args.m))
     print("n: {}".format(args.n))
@@ -92,23 +81,21 @@ parser.add_argument("--exceed_insertion_strategy", default="delete", type=str)
 # └────────────────────────┘
 subparsers = parser.add_subparsers(required=True)
 
-track_sp = subparsers.add_parser("track", help="Tracking an event")
-track_sp.add_argument("name", type=str, help="Event name")
-track_sp.add_argument("properties", type=str, help="Properties (Json String)")
-track_sp.set_defaults(op=(_track, "track"))
-
-user_add_sp = subparsers.add_parser("user_add", help="XXXXX")
-user_add_sp.add_argument("a", type=str, help="XXXXX")
-user_add_sp.set_defaults(op=(_user_add, "user_add"))
-
 test_sp = subparsers.add_parser("test", add_help=False)
 test_sp.add_argument("n", type=int, help="XXXXX")
-test_sp.set_defaults(op=(_test, "test"))
+test_sp.set_defaults(op=_test)
 
 test_batch_sp = subparsers.add_parser("test_batch", add_help=False)
 test_batch_sp.add_argument("m", type=int, help="size of each batch")
 test_batch_sp.add_argument("n", type=int, help="num of batches")
-test_batch_sp.set_defaults(op=(_test_batch, "test_batch"))
+test_batch_sp.set_defaults(op=_test_batch)
+
+
+user.init_parser(subparsers.add_parser("user", help="User related APIs"))
+analytics.init_parser(subparsers.add_parser("track", help="Track a event"))
+raw_tracker.init_parser(subparsers.add_parser("track_raw", help="Track a event by json string"))
+ad.init_parser(subparsers.add_parser("ad", add_help=False))
+test.init_parser(subparsers.add_parser("testt", add_help=False))
 
 
 # ┌──────────────────┐
@@ -120,24 +107,30 @@ parser.add_argument("--ns_sim", default=-1, type=int)
 args = parser.parse_args()
 # ═══════════════════════════════════════════════════════════════
 
-print("Initializing...")
-sep_length = max(len(args.app_id) + 10, len(args.server_url) + 14, + len(args.token) + 9, + len(args.token) + 13)
+
+arg_log_level = args.log_level.lower()
+if re.search("^i(nfo)?$", arg_log_level):
+    log_level = logging.INFO
+    log_level_word = "Info"
+elif re.search("^w(arn)?$", arg_log_level):
+    log_level = logging.WARNING
+    log_level_word = "Warning"
+elif re.search("^e(rror)?$", arg_log_level):
+    log_level = logging.ERROR
+    log_level_word = "Error"
+else:
+    log_level = logging.DEBUG
+    log_level_word = "Debug"
+
+sep_length = max(len(args.app_id) + 10, len(args.server_url) + 14, len(args.token) + 9, len(str(args.f_debug)) + 9,
+                 len(log_level_word) + 13)
 print("┏" + ("━"*sep_length) + "┓")
 print("┃ \033[1mapp_id\033[0m: {:{width}} ┃".format(args.app_id, width=sep_length-10))
 print("┃ \033[1mserver_url\033[0m: {:{width}} ┃".format(args.server_url, width=sep_length-14))
 print("┃ \033[1mtoken\033[0m: {:{width}} ┃".format(args.token, width=sep_length-9))
 print("┃ \033[1mdebug\033[0m: {:{width}} ┃".format(str(args.f_debug), width=sep_length-9))
-
-arg_log_level = args.log_level.lower()
-if re.search("^i(nfo)?$", arg_log_level):
-    log_level = logging.INFO
-elif re.search("^w(arn)?$", arg_log_level):
-    log_level = logging.WARNING
-elif re.search("^e(rror)?$", arg_log_level):
-    log_level = logging.ERROR
-else:
-    log_level = logging.DEBUG
-print("┃ \033[1mlog_level\033[0m: {:{width}} ┃".format(log_level, width=sep_length-13))
+if args.f_debug:
+    print("┃ \033[1mlog_level\033[0m: {:{width}} ┃".format(log_level_word, width=sep_length-13))
 
 consumer_name = args.consumer
 consumer = None
@@ -153,7 +146,9 @@ if consumer_name.lower() == "database_cache":
         exceed_insertion_strategy = ExceedInsertionStrategy.IGNORE
 
     consumer = DatabaseCacheConsumer(
-        args.app_id, args.token, args.server_url,
+        app_id=args.app_id,
+        token=args.token,
+        server_url=args.server_url,
         batch_size=args.batch_size,
         network_retries=args.network_retries,
         network_timeout=args.network_timeout,
@@ -165,7 +160,9 @@ if consumer_name.lower() == "database_cache":
     )
 elif consumer_name.lower() == "async_batch":
     consumer = AsyncBatchConsumer(
-        args.app_id, args.server_url, args.token,
+        app_id=args.app_id,
+        token=args.token,
+        server_url=args.server_url,
         interval=args.interval,
         flush_size=args.flush_size,
         queue_size=args.queue_size,
@@ -177,6 +174,4 @@ else:
 dt = DTAnalytics(consumer=consumer, debug=args.f_debug, log_level=log_level,)
 
 print("┗" + ("━"*sep_length) + "┛")
-print("Initialized!")
-print("Starting - {}".format(args.op[1]))
-args.op[0](args)     # Call Api func
+args.op(dt, args)     # Call Api func

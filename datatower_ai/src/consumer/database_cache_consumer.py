@@ -282,7 +282,7 @@ class _UploadTask(Task):
                 length=str(len(self.__entities))
             )
         except:
-            Logger.error("[UploadTask] send failed!")
+            Logger.exception("[UploadTask] send failed!")
         finally:
             timer.stop(one_shot=False)
             _CounterMonitor["UploadFromDbTask-send"] += len(self.__entities) if is_success else 0

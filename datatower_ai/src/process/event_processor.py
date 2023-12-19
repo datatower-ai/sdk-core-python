@@ -51,7 +51,7 @@ class _EventProcessor:
         else:
             properties = {}
 
-        import datatower_ai.src.data.extra_verify as extra_verify
+        import datatower_ai.src.process.extra_verify as extra_verify
         extra_verify.move_meta(properties, data)
         extra_verify.move_meta(event.meta, data, delete=False)
 

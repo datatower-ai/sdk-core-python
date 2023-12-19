@@ -61,11 +61,11 @@ class _HttpService(object):
         headers = {'app_id': app_id, 'DT-type': 'python-sdk', 'sdk-version': __version__,
                    'data-count': length, 'token': token}
 
-        return self.__post(server_url, data, headers)
+        return self.__post(url=server_url, data=data, headers=headers)
 
     def post_raw(self, url: str, data: Union[str, Dict], headers: Optional[Dict] = None) -> bool:
         try:
-            return self.__post(url, data, headers)
+            return self.__post(url=url, data=data, headers=headers)
         except:
             Logger.exception("[HttpService] post_raw")
             return False
