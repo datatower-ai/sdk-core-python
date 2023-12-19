@@ -18,8 +18,6 @@ from datatower_ai.src.util._holder import _Holder
 def _test(dt, args):
     print("Test")
     print("n: {}".format(args.n))
-    from datatower_ai.src.service.http_service import _HttpService
-    _HttpService._simulate = None if args.ns_sim < 0 else args.ns_sim
     for i in range(0, args.n):
         dt.track("123", None, "test_event", {"#bundle_id": "", "i": i})
     dt.flush()
@@ -30,8 +28,6 @@ def _test_batch(dt, args):
     print("Test")
     print("m: {}".format(args.m))
     print("n: {}".format(args.n))
-    from datatower_ai.src.service.http_service import _HttpService
-    _HttpService._simulate = None if args.ns_sim < 0 else args.ns_sim
     for i in range(0, args.n):
         dt.track_batch(*[Event("123", None, "test_event_batch", {"i": i}, {"#bundle_id": ""}) for _ in range(args.m)])
     dt.flush()
@@ -175,6 +171,9 @@ else:
 
 dt = DTAnalytics(consumer=consumer, debug=args.f_debug, log_level=log_level,)
 _Holder().show_statistics = args.f_show_statistics
+
+from datatower_ai.src.service.http_service import _HttpService
+_HttpService._simulate = args.ns_sim
 
 print("┗" + ("━"*sep_length) + "┛")
 args.op(dt, args)     # Call Api func

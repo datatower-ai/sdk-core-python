@@ -6,7 +6,7 @@ from datatower_ai.src.util.type_check import is_number, is_str
 from datatower_ai import DTMetaDataException, DTIllegalDataException
 
 __META = (("#app_id", str), ("#bundle_id", str), ("#android_id", str), ("#gaid", str), ("#dt_id", str), ("#acid", str),
-          ("#event_time", int), ("#event_syn", str))
+          ("#event_time", int), ("#event_syn", str))        # No need to include: ("#event_type", str)
 __COMPULSORY_META = ("#app_id", "#bundle_id", "#event_time", "#event_name", "#event_type", "#event_syn")
 __NAME_REGEX = "^[#$a-zA-Z][a-zA-Z0-9_]{0,63}$"
 
@@ -59,7 +59,7 @@ __PRESET_EVENT = {
 }
 
 
-def move_meta(source_properties, target, delete = True):
+def move_meta(source_properties, target, delete=True):
     if source_properties is None:
         return
     for (key, _) in __META:

@@ -88,12 +88,12 @@ class DTAdReport(_DTApi):
             ad_type,
             platform,
             seq,
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report Ad begins to load.
 
@@ -121,14 +121,14 @@ class DTAdReport(_DTApi):
             duration,
             result,
             seq,
-            error_code = 0,
-            error_message = "",
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            error_code=0,
+            error_message="",
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report Ad is finish loading.
 
@@ -165,12 +165,12 @@ class DTAdReport(_DTApi):
             location,
             seq,
             entrance,
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report requesting to show Ad
 
@@ -201,12 +201,12 @@ class DTAdReport(_DTApi):
             location,
             seq,
             entrance,
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report requesting to show Ad
 
@@ -239,12 +239,12 @@ class DTAdReport(_DTApi):
             error_code,
             error_message,
             entrance,
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report Ad is failed to show
 
@@ -277,12 +277,12 @@ class DTAdReport(_DTApi):
             location,
             seq,
             entrance,
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report Ad is closed
 
@@ -313,12 +313,12 @@ class DTAdReport(_DTApi):
             location,
             seq,
             entrance,
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report Ad is clicked
 
@@ -349,12 +349,12 @@ class DTAdReport(_DTApi):
             location,
             seq,
             entrance,
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report rewarded from Ad
 
@@ -385,12 +385,12 @@ class DTAdReport(_DTApi):
             location,
             seq,
             entrance,
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report conversion by clicking
 
@@ -421,12 +421,12 @@ class DTAdReport(_DTApi):
             location,
             seq,
             entrance,
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report conversion by leaving app
 
@@ -457,12 +457,12 @@ class DTAdReport(_DTApi):
             location,
             seq,
             entrance,
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report conversion by rewarded
 
@@ -494,12 +494,12 @@ class DTAdReport(_DTApi):
             value,
             currency,
             precision,
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report the value from displaying Ad
 
@@ -533,12 +533,12 @@ class DTAdReport(_DTApi):
             value,
             precision,
             country,
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report the value from displaying Ad
 
@@ -571,12 +571,12 @@ class DTAdReport(_DTApi):
             location,
             seq,
             entrance,
-            mediation = AdMediation.IDLE,
-            mediation_id = "",
-            dt_id = None,
-            acid = None,
-            properties = None,
-            meta = None
+            mediation=AdMediation.IDLE,
+            mediation_id="",
+            dt_id=None,
+            acid=None,
+            properties=None,
+            meta=None
     ):
         """ Report leaving the app
 
@@ -602,7 +602,7 @@ class DTAdReport(_DTApi):
     @staticmethod
     def __update_properties(properties, ad_id, ad_type, platform, seq, mediation, mediation_id,
                             location="", entrance="", others=None):
-        props = properties if properties is not None else {}
+        props=properties if properties is not None else {}
         props.update({
             "#ad_id": ad_id,
             "#ad_type_code": _get_value(ad_type),

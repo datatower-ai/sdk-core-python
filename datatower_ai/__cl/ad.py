@@ -93,7 +93,7 @@ def init_parser(parser):
     parser.add_argument("--error_message", type=str, default="", help="")
     parser.add_argument("--location", type=str, help="")
     parser.add_argument("--entrance", type=str, default="", help="")
-    parser.add_argument("--value", type=float, help="")
+    parser.add_argument("--value", type=str, help="")
     parser.add_argument("--currency", type=str, help="")
     parser.add_argument("--country", type=str, help="")
     parser.add_argument("--precision", type=str, help="")
