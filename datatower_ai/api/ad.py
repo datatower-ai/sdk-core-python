@@ -70,7 +70,7 @@ class AdMediation(Enum):
 
 
 def _get_value(raw: Union[AdType, AdPlatform, AdMediation, int]) -> str:
-    if raw is int:
+    if type(raw) is int:
         return str(raw)
     if isinstance(raw, (AdType, AdPlatform, AdMediation)):
         try:
@@ -618,4 +618,5 @@ class DTAdReport(_DTApi):
 
         if others is Dict:
             props.update(others)
+
         return props

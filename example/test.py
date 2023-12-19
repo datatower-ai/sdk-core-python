@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     dt.utils.track_timer_pause("track_timer_event", dt_id="aaaa")
 
-    dt.ad.report_show(ad_id="adadid", ad_type=AdType.BANNER, platform=AdPlatform.LOVINJOYADS, location="x",
+    dt.ad.report_show(ad_id="adadid", ad_type=0, platform=AdPlatform.LOVINJOYADS, location="x",
                       seq="voapnv2va", entrance="x", mediation=AdMediation.MAX, mediation_id="id_xxx", dt_id="aaaa",
                       meta=meta)
 
