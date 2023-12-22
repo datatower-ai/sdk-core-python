@@ -25,17 +25,20 @@ class _EventProcessor:
         )
 
     def add_batch(self, send_type, *events):
-        batch = [self.__build_data_from_event(send_type, event) for event in events]
-
         try:
+            batch = [self.__build_data_from_event(send_type, event) for event in events]
             Logger.log('collect data=(len: {}){}'.format(len(batch), batch))
             self.__consumer.add(lambda: [
                 json.dumps(data, separators=(',', ':'), cls=DTDateTimeSerializer, allow_nan=False) for data in batch
             ])
-        except TypeError as e:
-            raise DTIllegalDataException(e)
+        except TypeError:
+            # raise DTIllegalDataException(e)
+            Logger.exception("Error occur during processing.")
         except ValueError:
-            raise DTIllegalDataException("Nan or Inf data are not allowed")
+            # raise DTIllegalDataException("Nan or Inf data are not allowed")
+            Logger.exception("Nan or Inf data are not allowed")
+        except:
+            Logger.exception("Error occur during processing.")
 
     def __build_data_from_event(self, send_type, event):
         if event.dt_id is None and event.acid is None:
