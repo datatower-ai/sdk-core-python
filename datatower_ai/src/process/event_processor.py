@@ -64,9 +64,7 @@ class _EventProcessor:
         if '#event_syn' not in data:
             self.__build_data(data, '#event_syn', random_str(16))
 
-        if event.dt_id is None:
-            self.__build_data(data, '#dt_id', '0000000000000000000000000000000000000000')
-        else:
+        if event.dt_id is not None:
             self.__build_data(data, '#dt_id', event.dt_id)
 
         if self.__debug:

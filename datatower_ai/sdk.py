@@ -63,7 +63,7 @@ class DTAnalytics(_DTApi):
     def set_dynamic_super_properties_tracker(self, dynamic_super_properties_tracker):
         self.__dynamic_super_properties_tracker = dynamic_super_properties_tracker
 
-    def user_set(self, dt_id=None, acid=None, properties=None, meta=None):
+    def user_set(self, dt_id, acid=None, properties=None, meta=None):
         """
         设置用户属性
 
@@ -79,7 +79,7 @@ class DTAnalytics(_DTApi):
         self._add(dt_id=dt_id, acid=acid, event_name='#user_set', send_type='user',
                   properties_add=properties, meta=meta)
 
-    def user_unset(self, dt_id=None, acid=None, properties=None, meta=None):
+    def user_unset(self, dt_id, acid=None, properties=None, meta=None):
         """
         删除某个用户的用户属性
 
@@ -94,7 +94,7 @@ class DTAnalytics(_DTApi):
         self._add(dt_id=dt_id, acid=acid, event_name='#user_unset', send_type='user',
                   properties_add=properties, meta=meta)
 
-    def user_set_once(self, dt_id=None, acid=None, properties=None, meta=None):
+    def user_set_once(self, dt_id, acid=None, properties=None, meta=None):
         """
         设置用户属性, 不覆盖已存在的用户属性
 
@@ -109,7 +109,7 @@ class DTAnalytics(_DTApi):
         self._add(dt_id=dt_id, acid=acid, event_name='#user_set_once', send_type='user',
                   properties_add=properties, meta=meta)
 
-    def user_add(self, dt_id=None, acid=None, properties=None, meta=None):
+    def user_add(self, dt_id, acid=None, properties=None, meta=None):
         """
         对指定的数值类型的用户属性进行累加操作
 
@@ -125,7 +125,7 @@ class DTAnalytics(_DTApi):
         self._add(dt_id=dt_id, acid=acid, event_name='#user_add', send_type='user',
                   properties_add=properties, meta=meta)
 
-    def user_append(self, dt_id=None, acid=None, properties=None, meta=None):
+    def user_append(self, dt_id, acid=None, properties=None, meta=None):
         """
         对指定的**列表**类型的用户属性进行追加操作，列表内的元素都会转成字符串类型。
 
@@ -143,7 +143,7 @@ class DTAnalytics(_DTApi):
         self._add(dt_id=dt_id, acid=acid, event_name='#user_append', send_type='user',
                   properties_add=properties, meta=meta)
 
-    def user_uniq_append(self, dt_id=None, acid=None, properties=None, meta=None):
+    def user_uniq_append(self, dt_id, acid=None, properties=None, meta=None):
         """
         对指定的**列表**类型的用户属性进行追加操作，列表内的元素都会转成字符串类型，并对该属性的数组进行去重
 
@@ -161,7 +161,7 @@ class DTAnalytics(_DTApi):
         self._add(dt_id=dt_id, acid=acid, event_name='#user_uniq_append', send_type='user',
                   properties_add=properties, meta=meta)
 
-    def track(self, dt_id=None, acid=None, event_name=None, properties=None, meta=None):
+    def track(self, dt_id, acid=None, event_name=None, properties=None, meta=None):
         """
         发送事件数据
 
@@ -183,7 +183,7 @@ class DTAnalytics(_DTApi):
                   meta=meta)
 
     @deprecated("This function is deprecated, please use track() instead.")
-    def track_first(self, dt_id=None, acid=None, event_name='#app_install', properties=None):
+    def track_first(self, dt_id, acid=None, event_name='#app_install', properties=None):
         """
         发送安装事件数据
 

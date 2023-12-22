@@ -84,9 +84,9 @@ def extra_verify(dictionary):
 
     dt_id = dictionary.get("#dt_id", None)
     ac_id = dictionary.get("#acid", None)
-    if dt_id is None and ac_id is None:
-        raise DTMetaDataException("At least one of dt_id or ac_id should be provided!")
-    if dt_id is not None and not isinstance(dt_id, str):
+    if dt_id is None:
+        raise DTMetaDataException("dt_id should be provided but missing!")
+    if not isinstance(dt_id, str):
         raise DTMetaDataException("dt_id should be str!")
     if ac_id is not None and not isinstance(ac_id, str):
         raise DTMetaDataException("acid should be str!")

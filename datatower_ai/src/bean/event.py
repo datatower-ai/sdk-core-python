@@ -2,7 +2,7 @@ from datatower_ai.src.util.exception import DTMetaDataException
 
 
 class Event:
-    def __init__(self, dt_id=None, acid=None, event_name=None, properties=None, meta=None):
+    def __init__(self, dt_id, acid=None, event_name=None, properties=None, meta=None):
         """Event data
 
         :param dt_id: A unique identifier per user per device.
@@ -18,9 +18,6 @@ class Event:
         self.__event_name = event_name
         self.__properties = properties
         self.__meta = meta
-
-        if self.__dt_id is None and self.__acid is None:
-            raise DTMetaDataException("At least one of dt_id and acid should be provided!")
 
     @property
     def dt_id(self):
