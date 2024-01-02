@@ -5,7 +5,6 @@ from __future__ import unicode_literals
 from datatower_ai.api.base import _DTApi
 from datatower_ai.api import DTAdReport
 from datatower_ai.api import DTAnalyticsUtils
-from datatower_ai.src.bean.event import Event
 from datatower_ai.src.util.decoration import deprecated
 from datatower_ai.src.util.exception import DTIllegalDataException, DTMetaDataException
 
@@ -43,9 +42,9 @@ class DTAnalytics(_DTApi):
         self.__app_id = consumer.get_app_id()
         from datatower_ai.__version__ import __version__
         self.__preset_properties = {
-            "#app_id": self.__app_id,
-            "#sdk_type": "dt_python_sdk",
-            "#sdk_version_name": __version__,
+            str("#app_id"): self.__app_id,
+            str("#sdk_type"): str("dt_python_sdk"),
+            str("#sdk_version_name"): __version__,
         }
         Logger.set(debug, log_level)
 

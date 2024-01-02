@@ -100,6 +100,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
         unsent = self.__queue.qsize() + len(self.__flush_buffer)
         if unsent > 0:
             Logger.error("CLOSED with {} records unsent being discarded！".format(unsent))
+        AsyncBatchConsumer._print_statistics()
 
     def _need_drain(self):
         return self.__queue.qsize() > self.__batch
@@ -198,6 +199,5 @@ class AsyncBatchConsumer(_AbstractConsumer):
 
                 # 发现 stop 标志位时安全退出
                 if self._stop_event.isSet():
-                    AsyncBatchConsumer._print_statistics()
                     break
             self._finished_event.set()

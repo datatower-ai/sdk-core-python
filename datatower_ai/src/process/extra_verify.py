@@ -70,7 +70,6 @@ def move_meta(source_properties, target, delete=True):
 
 
 def extra_verify(dictionary):
-    print(dictionary)
     for prop in __COMPULSORY_META:
         if prop not in dictionary:
             raise DTMetaDataException("Required meta property \"{}\" is missing!".format(prop))
@@ -87,9 +86,11 @@ def extra_verify(dictionary):
     if dt_id is None:
         raise DTMetaDataException("dt_id should be provided but missing!")
     if not isinstance(dt_id, str):
-        raise DTMetaDataException("dt_id should be str!")
+        raise DTMetaDataException("dt_id should be str type!")
+    if not dt_id:
+        raise DTMetaDataException("dt_id can not be empty!")
     if ac_id is not None and not isinstance(ac_id, str):
-        raise DTMetaDataException("acid should be str!")
+        raise DTMetaDataException("acid should be str type!")
 
     event_name = dictionary["#event_name"]
     if not __full_match(__NAME_REGEX, event_name):
@@ -171,4 +172,7 @@ def __find_prop_in_preset_event(event_name, prop_name):
     props = __PRESET_EVENT.get(event_name, ())
     if len(props) == 0:
         return None
-    return next((x for x in props if x[0] == prop_name), None)
+    tp = next((x for x in props if x[0] == prop_name), None)
+    if tp is not None:
+        return tp
+    return next((x for x in __PRESET_PROPS_COMMON if x[0] == prop_name), None)

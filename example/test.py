@@ -87,6 +87,15 @@ if __name__ == "__main__":
     dt.utils.track_timer_stop("track_timer_event", dt_id="aaaa", meta=meta)
     dt.flush()
 
+    dt.track(
+        dt_id="test0001",
+        acid="acid0001",
+        event_name="#app_install",
+        properties=None,
+        meta=meta
+    )
+    dt.flush()
+
 
     # 关闭并退出dt，程序退出前需要调用此接口，避免缓存内的数据丢失
     dt.close()

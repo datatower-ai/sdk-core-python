@@ -41,12 +41,6 @@ class _EventProcessor:
             Logger.exception("Error occur during processing.")
 
     def __build_data_from_event(self, send_type, event):
-        if event.dt_id is None and event.acid is None:
-            raise DTMetaDataException("dt_id and acid must be set at least one")
-        if (event.dt_id is not None and not is_str(event.dt_id)) or (
-                event.acid is not None and not is_str(event.acid)):
-            raise DTMetaDataException("dt_id and acid must be string type")
-
         assert_properties(event.event_name, event.properties)
 
         data = {'#event_type': send_type}
