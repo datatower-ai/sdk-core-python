@@ -67,7 +67,6 @@ class AsyncBatchConsumer(_AbstractConsumer):
         try:
             for msg in msgs:
                 self.__queue.put_nowait(msg)
-            _CounterMonitor["async_batch-insert"] += len(msgs)
         except queue.Full as e:
             raise DTNetworkException(e)
 
@@ -161,7 +160,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
         Logger.log("[Statistics] 'upload' time used sum: {}, avg: {}".format(
             tm.get_sum("async_batch-upload"), tm.get_avg("async_batch-upload")
         ))
-        Logger.log("[Statistics] 'track' count: {}".format(_CounterMonitor["async_batch-insert"]))
+        Logger.log("[Statistics] 'events' count: {}".format(_CounterMonitor["events"]))
         Logger.log("[Statistics] 'uploaded' count: {}".format(_CounterMonitor["async_batch-upload_success"]))
         Logger.log("="*80)
 
