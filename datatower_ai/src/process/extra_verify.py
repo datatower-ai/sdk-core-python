@@ -50,12 +50,14 @@ __PRESET_EVENT = {
     "#ad_left_app": __PRESET_PROPS_AD,
     "#ad_return_app": __PRESET_PROPS_AD,
     "#ad_rewarded": __PRESET_PROPS_AD,
-    "#ad_conversion": __PRESET_PROPS_AD + (("$earnings", float),),
+    "#ad_conversion": __PRESET_PROPS_AD,
+    "$ad_conversion": __PRESET_PROPS_AD + (("$earnings", float),),
     "#ad_paid": __PRESET_PROPS_AD,
     "#iap_purchase_success": (("#iap_order", str), ("#iap_sku", str), ("#iap_price", float), ("#iap_currency", str),
                               ("$iap_price_exchange", float)),
     "#ias_subscribe_success": __PRESET_PROPS_IAS,
-    "#ias_subscribe_notify": __PRESET_PROPS_IAS + (("$original_ios_notification_type", str),)
+    "#ias_subscribe_notify": __PRESET_PROPS_IAS,
+    "$ias_subscribe_notify": __PRESET_PROPS_IAS + (("$original_ios_notification_type", str),),
 }
 
 
