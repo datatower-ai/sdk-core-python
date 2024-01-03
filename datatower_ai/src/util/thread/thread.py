@@ -272,7 +272,7 @@ class WorkerManager:
             Logger.debug("[%s] Awakened all workers" % self)
             self.__on_all_worker_revived()
 
-    def execute(self, task, delay = 0):
+    def execute(self, task, delay=0):
         """Dispatch the task to workers.
 
         Will notify a worker to prevent the state of all worker is in wait.
@@ -292,7 +292,7 @@ class WorkerManager:
             Logger.log("[%s] is not started when calling execute(), starting..." % self, logging.DEBUG)
             self.start()
 
-        target_time = time.time() + delay / 1000
+        target_time = time.time() + max(0, delay) / 1000
 
         self.__queue.put((target_time, task))
         self.__condition.acquire()
