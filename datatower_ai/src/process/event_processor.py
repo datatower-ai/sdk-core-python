@@ -40,8 +40,9 @@ class _EventProcessor:
         except ValueError:
             # raise DTIllegalDataException("Nan or Inf data are not allowed")
             Logger.exception("Nan or Inf data are not allowed")
-        except:
-            Logger.exception("Error occur during processing.")
+        except Exception as e:
+            # Logger.exception("Error occur during processing.")
+            raise e
 
     def __build_data_from_event(self, send_type, event):
         assert_properties(event.event_name, event.properties)

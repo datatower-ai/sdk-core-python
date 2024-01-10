@@ -153,4 +153,15 @@ class _HttpService(object):
 
         if len(group) > 0:
             result.append(group)
+
+        avg_len = len(data) / len(result)
+        old_avg_len = _CounterMonitor["http_avg_compress_len"]
+        old_avg_len_cnt = _CounterMonitor["http_avg_compress_len_cnt"]
+        new_avg_len = (old_avg_len * old_avg_len_cnt + avg_len) / (old_avg_len_cnt + 1)
+        _CounterMonitor["http_avg_compress_len"] = new_avg_len
+        new_cnt = (old_avg_len_cnt + 1) % 1000000
+        _CounterMonitor["http_avg_compress_len_cnt"] = new_cnt if new_cnt != 0 else 1000
+
+        Logger.debug("Current average upload count per request: {}".format(new_avg_len))
+
         return result

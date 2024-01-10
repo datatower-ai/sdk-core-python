@@ -64,11 +64,16 @@ class AsyncBatchConsumer(_AbstractConsumer):
         self._add(get_msg())
 
     def _add(self, msgs):
+        cnt = 0
         try:
             for msg in msgs:
                 self.__queue.put_nowait(msg)
+                cnt += 1
+                _CounterMonitor["async_batch-insert"] += 1
+                _CounterMonitor["async_batch-queue_size"] = self.__queue.qsize()
         except queue.Full as e:
-            raise DTNetworkException(e)
+            _CounterMonitor["async_batch-drop"] += len(msgs) - cnt
+            raise e
 
         if self.__queue.qsize() > self.__batch:
             self.flush()
@@ -120,6 +125,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
                     length = len(self.__flush_buffer)
             except queue.Empty:
                 break
+        _CounterMonitor["async_batch-queue_size"] = self.__queue.qsize()
 
         if length > 0:
             with self.__sem:
@@ -135,9 +141,9 @@ class AsyncBatchConsumer(_AbstractConsumer):
                         self.__server_url, self.__app_id, self.__token, '[' + ','.join(split) + ']', str(len(split))
                     )
                 except DTNetworkException as e:
-                    Logger.log("{}: {}".format(e, split), level=logging.WARNING)
+                    Logger.log("{}, len: {}".format(e, len(split)), level=logging.WARNING)
                 except DTIllegalDataException as e:
-                    Logger.log("{}: {}".format(e, split), level=logging.WARNING)
+                    Logger.log("{}, len: {}".format(e, len(split)), level=logging.WARNING)
                 finally:
                     timer.stop(one_shot=False)
 

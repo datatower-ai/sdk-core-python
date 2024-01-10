@@ -11,6 +11,7 @@ import datatower_ai.__cl.user as user
 import datatower_ai.__cl.analytics as analytics
 import datatower_ai.__cl.raw_track as raw_tracker
 import datatower_ai.__cl.test as test
+import datatower_ai.__cl.test2 as test2
 import datatower_ai.__cl.ad as ad
 from datatower_ai.src.util._holder import _Holder
 
@@ -84,6 +85,7 @@ analytics.init_parser(subparsers.add_parser("track", help="Track a event"))
 raw_tracker.init_parser(subparsers.add_parser("track_raw", help="Track a event by json string"))
 ad.init_parser(subparsers.add_parser("ad", add_help=False))
 test.init_parser(subparsers.add_parser("testt", add_help=False))
+test2.init_parser(subparsers.add_parser("testt2", add_help=False))
 
 # test_sp = subparsers.add_parser("test", add_help=False)
 # test_sp.add_argument("n", type=int, help="XXXXX")
@@ -97,7 +99,7 @@ test.init_parser(subparsers.add_parser("testt", add_help=False))
 # ┌──────────────────┐
 # │ Others Arguments │
 # └──────────────────┘
-parser.add_argument("--ns_sim", default=-1, type=int)
+parser.add_argument("--ns_sim", default=None, type=int)
 parser.add_argument("-show_statistics", dest="f_show_statistics", action="store_true", help=None)
 
 # ═══════════════════════════════════════════════════════════════
