@@ -244,6 +244,20 @@ class DTAnalytics(_DTApi):
     def enable_log(isPrint=False):
         Logger.is_print = isPrint
 
+    def register_pager(self, pager):
+        """
+        Register a pager to listen errors or warnings from SDK.
+
+        :param pager: A function with signature: (code: int, message: str) -> None.
+        """
+        self.__consumer.register_pager(pager)
+
+    def unregister_pager(self, pager):
+        """
+        Unregister this pager.
+        """
+        self.__consumer.unregister_pager(pager)
+
     def flush(self):
         """
         立即提交数据到相应的接收端

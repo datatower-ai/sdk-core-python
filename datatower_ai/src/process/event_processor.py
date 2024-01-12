@@ -34,15 +34,21 @@ class _EventProcessor:
             self.__consumer.add(lambda: [
                 json.dumps(data, separators=(',', ':'), cls=DTDateTimeSerializer, allow_nan=False) for data in batch
             ])
-        except TypeError:
+        except TypeError as e:
             # raise DTIllegalDataException(e)
             Logger.exception("Error occur during processing.")
-        except ValueError:
+            from datatower_ai.src.bean.pager_code import PAGER_CODE_COMMON
+            self.__consumer._page_message(PAGER_CODE_COMMON, repr(e))
+        except ValueError as e:
             # raise DTIllegalDataException("Nan or Inf data are not allowed")
             Logger.exception("Nan or Inf data are not allowed")
+            from datatower_ai.src.bean.pager_code import PAGER_CODE_COMMON
+            self.__consumer._page_message(PAGER_CODE_COMMON, repr(e))
         except Exception as e:
-            # Logger.exception("Error occur during processing.")
-            raise e
+            # raise e
+            Logger.exception("Error occur during processing.")
+            from datatower_ai.src.bean.pager_code import PAGER_CODE_COMMON
+            self.__consumer._page_message(PAGER_CODE_COMMON, repr(e))
 
     def __build_data_from_event(self, send_type, event):
         assert_properties(event.event_name, event.properties)

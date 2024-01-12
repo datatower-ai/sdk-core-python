@@ -22,4 +22,10 @@ class DTNetworkException(DTException):
     网络异常
     在因为网络或者不可预知的问题导致数据无法发送时，SDK会抛出此异常，用户应当捕获并处理.
     """
-    pass
+    def __init__(self, code, msg):
+        super(DTNetworkException, self).__init__(msg)
+        self.__code = code
+
+    @property
+    def code(self):
+        return self.__code

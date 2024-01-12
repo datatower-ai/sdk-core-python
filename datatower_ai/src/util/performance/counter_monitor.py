@@ -147,6 +147,16 @@ class _CounterMonitor(six.with_metaclass(_CounterMonitorMeta, object)):
     pass
 
 
+def count_avg(key, value, max_cnt, long_term_keep):
+    old_value = _CounterMonitor[key]
+    old_cnt = _CounterMonitor[key + "_avgcnt"]
+    new_avg = (old_value * old_cnt + value) / (old_cnt + 1)
+    _CounterMonitor[key] = new_avg
+    new_cnt = (old_cnt + 1) % max_cnt
+    _CounterMonitor[key + "_avgcnt"] = new_cnt if new_cnt != 0 else long_term_keep
+    return new_avg
+
+
 if __name__ == "__main__":
     _CounterMonitor["test"] = 20
     print("set: {}".format(_CounterMonitor["test"]))

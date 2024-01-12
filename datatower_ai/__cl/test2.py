@@ -2,6 +2,7 @@
 import os
 import time
 
+from datatower_ai import Event
 from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor
 from datatower_ai.src.util.performance.time_monitor import TimeMonitor
 from datatower_ai.src.util.thread.thread import WorkerManager
@@ -11,9 +12,13 @@ from datatower_ai.src.util.json_util import json_loads_byteified
 
 def track(worker_manager, size, dt, event_name, props, meta):
     try:
-        for _ in range(size):
-            dt.track(dt_id=meta.get("#dt_id", None), acid=meta.get("#acid", None), event_name=event_name,
-                     properties=props, meta=meta)
+        # for _ in range(size):
+        #     dt.track(dt_id=meta.get("#dt_id", None), acid=meta.get("#acid", None), event_name=event_name,
+        #              properties=props, meta=meta)
+        dt.track_batch(*[
+            Event(dt_id=meta.get("#dt_id", None), acid=meta.get("#acid", None), event_name=event_name,
+                  properties=props, meta=meta) for _ in range(size)
+        ])
     except Exception as e:
         print(type(e))
         # os._exit(1)         # force quit
@@ -36,7 +41,8 @@ def handle(dt, args):
         gap, init_size, incr_beg_offset, incr_gap, incr_size, event_name
     ))
 
-    worker_manager = WorkerManager("test_worker_manager", size=5)
+    wm_size = 5
+    worker_manager = WorkerManager("test_worker_manager", size=wm_size)
     tm = TimeMonitor()
 
     beg_time = time.time()
@@ -56,13 +62,23 @@ def handle(dt, args):
         print("[TEST2] Starting task with size: {}, round: {}, time elapsed: {:.2f}ms, avg upload time: {:.2f}ms, "
               "track count: {}, uploaded count: {}, "
               "queue size: {}, inserted to queue: {}, dropped: {}, "
-              "avg compress rate: {:.4f}, avg upload count: {}".format(
+              "avg compress rate: {:.4f}, avg upload count: {:.2f}, "
+              "flush buffer size: {}, avg splits per flush: {:.2f}, "
+              "avg data split duration: {:.2f}ms, avg upload phase duration: {:.2f}ms".format(
             size, rounds, (crt_time - beg_time) * 1000, tm.get_avg("async_batch-upload"),
             _CounterMonitor["events"], _CounterMonitor["async_batch-upload_success"],
             _CounterMonitor["async_batch-queue_size"], _CounterMonitor["async_batch-insert"], _CounterMonitor["async_batch-drop"],
-            _CounterMonitor["http_avg_compress_rate"].value, _CounterMonitor["http_avg_compress_len"]
+            _CounterMonitor["http_avg_compress_rate"].value, _CounterMonitor["http_avg_compress_len"].value,
+            _CounterMonitor["async_batch-flush_buffer_size"], _CounterMonitor["async_batch-avg_split_per_flush"].value,
+            tm.get_avg("ns_split_data"), tm.get_avg("async_batch-upload_total")
         ))
-        worker_manager.execute(lambda: track(worker_manager, size, dt, event_name, props, meta))
+
+        if size < wm_size:
+            worker_manager.execute(lambda: track(worker_manager, size, dt, event_name, props, meta))
+        else:
+            for _ in range(wm_size-1):
+                worker_manager.execute(lambda: track(worker_manager, size//wm_size, dt, event_name, props, meta))
+            worker_manager.execute(lambda: track(worker_manager, (size//wm_size) + (size%wm_size), dt, event_name, props, meta))
 
         rounds += 1
         delta = time.time() - crt_time

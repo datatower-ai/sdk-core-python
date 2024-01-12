@@ -15,6 +15,11 @@ class _DTQualityLevel(Enum):
     MESSAGE = 3
 
 
+# _CODE_COMMON_DEFAULT_EXAMPLE = 50000001                          # 5(PY)00(Common)00(Category)001(Code)
+_CODE_ASYNC_BATCH_CONSUMER_QUEUE_FULL = 50100001                 # 5(PY)01(Consumer)00(AsyncBatch)001(Code)
+_CODE_ASYNC_BATCH_CONSUMER_QUEUE_REACH_THRESHOLD = 50100002
+
+
 class _DTQualityHelper(Singleton):
     from datatower_ai.__version__ import __version__
     import platform
@@ -44,7 +49,7 @@ class _DTQualityHelper(Singleton):
     def __report_qlt_msg_task(app_id, code, msg, level):
         url = "https://debug.roiquery.com/debug"
         body = _DTQualityHelper.__build_data(app_id, code, msg, level)
-        if _HttpService(timeout=3000).post_raw(url, body):
+        if _HttpService(timeout=3000, compress=False).post_raw(url, body):
             Logger.debug("[Quality] Successfully reported! (code: {}, msg: {}, level: {})".format(
                 code, msg, level.value
             ))
@@ -55,9 +60,11 @@ class _DTQualityHelper(Singleton):
 
     @staticmethod
     def __build_data(app_id, code, msg, level):
-        return json.dumps({
+        json_object = {
             "app_id": app_id,
             "error_code": code,
             "error_level": level.value,
             "error_message": msg,
-        }.update(_DTQualityHelper.__common_data), separators=(',', ':'))
+        }
+        json_object.update(_DTQualityHelper.__common_data)
+        return json.dumps(json_object, separators=(',', ':'))
