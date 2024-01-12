@@ -90,7 +90,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
             from datatower_ai.src.util.performance.quality_helper import _DTQualityHelper, _DTQualityLevel, _CODE_ASYNC_BATCH_CONSUMER_QUEUE_REACH_THRESHOLD
             msg = ("Queue is reaching threshold (70%)! Caution: data will not be inserted when queue full. "
                    "Max size: {}, current size: {}, flush_size: {}, avg upload phase duration: {:.2f}ms").format(
-                self.__queue.maxsize, crt_size, self.__batch, TimeMonitor().get_avg("async_batch-upload_total").value
+                self.__queue.maxsize, crt_size, self.__batch, TimeMonitor().get_avg("async_batch-upload_total")
             )
             _DTQualityHelper().report_quality_message(
                 app_id=self.get_app_id(),
@@ -110,7 +110,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
     def __on_queue_full(self, crt_batch_len, num_inserted):
         msg = "Queue is full ({})! Need to add: {}, added: {} and dropped: {}, flush_size: {}, avg upload phase duration: {:.2f}ms".format(
             self.__queue.maxsize, crt_batch_len, num_inserted, crt_batch_len - num_inserted, self.__batch,
-            TimeMonitor().get_avg("async_batch-upload_total").value
+            TimeMonitor().get_avg("async_batch-upload_total")
         )
         Logger.error("ERROR: " + msg)
         from datatower_ai.src.util.performance.quality_helper import _DTQualityHelper, _DTQualityLevel, _CODE_ASYNC_BATCH_CONSUMER_QUEUE_FULL
@@ -163,16 +163,17 @@ class AsyncBatchConsumer(_AbstractConsumer):
         global PAGER_CODE_COMMON_NETWORK_ERROR
         timer_ut = TimeMonitor().start("async_batch-upload_total")
 
+        timer_uffq = TimeMonitor().start("async_batch-upload_fetch_from_queue")
         with self.__sem:
             length = len(self.__flush_buffer)
 
-        while length < self.__batch:
-            try:
-                with self.__sem:
+            while length < self.__batch:
+                try:
                     self.__flush_buffer.append(str(self.__queue.get_nowait()))
                     length = len(self.__flush_buffer)
-            except queue.Empty:
-                break
+                except queue.Empty:
+                    break
+        timer_uffq.stop(one_shot=False)
         _CounterMonitor["async_batch-queue_size"] = self.__queue.qsize()
         _CounterMonitor["async_batch-flush_buffer_size"] = length
 
