@@ -59,18 +59,19 @@ parser.add_argument("-d", dest="f_debug", action="store_true", help="Debug mode.
 # ┌─────────────────────────────┐
 # │ Consumer Specific Arguments │
 # └─────────────────────────────┘
-# async_batch
+# async_batch_consumer, ABC
 parser.add_argument("--interval", default=3, type=int)
-parser.add_argument("--flush_size", default=20, type=int)
+parser.add_argument("--flush_size_kb", default=20, type=int)
 parser.add_argument("--queue_size", default=100000, type=int)
 parser.add_argument("--close_retry", default=1, type=int)
+parser.add_argument("--num_network_threads", default=2, type=int)
 
 # database_cache
 parser.add_argument("--batch_size", default=50, type=int)
 parser.add_argument("--network_retries", default=3, type=int)
 parser.add_argument("--network_timeout", default=3000, type=int)
 parser.add_argument("--num_db_threads", default=2, type=int)
-parser.add_argument("--num_network_threads", default=2, type=int)
+# parser.add_argument("--num_network_threads", default=2, type=int)                 # The same as ABC
 parser.add_argument("--thread_keep_alive_ms", default=1000, type=int)
 parser.add_argument("--cache_size", default=5000, type=int)
 parser.add_argument("--exceed_insertion_strategy", default="delete", type=str)
@@ -164,9 +165,10 @@ elif consumer_name.lower() == "async_batch":
         token=args.token,
         server_url=args.server_url,
         interval=args.interval,
-        flush_size=args.flush_size,
+        flush_size_kb=args.flush_size_kb,
         queue_size=args.queue_size,
-        close_retry=args.close_retry
+        close_retry=args.close_retry,
+        num_network_threads=args.num_network_threads,
     )
 else:
     raise ValueError("Given --consumer \"{}\" is not valid!".format(consumer_name))

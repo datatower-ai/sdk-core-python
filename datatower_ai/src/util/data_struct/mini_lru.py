@@ -64,6 +64,9 @@ class MiniLru(object):
             self.put(key, obj)
         return obj
 
+    def __contains__(self, key):
+        return type(self.get(key, _NoSuchItem())) is not _NoSuchItem
+
     def __setitem__(self, key, value):
         self.update_or_put(key, value)
 

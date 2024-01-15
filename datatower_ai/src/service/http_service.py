@@ -3,12 +3,14 @@ import gzip
 import json
 import time
 
+from requests.exceptions import InvalidSchema
 from urllib3.exceptions import MaxRetryError, ConnectionError
 
 from datatower_ai.src.bean.pager_code import PAGER_CODE_SUB_NETWORK_MAX_RETRIES, PAGER_CODE_SUB_NETWORK_CONNECTION, \
     PAGER_CODE_SUB_NETWORK_OTHER
 from datatower_ai.src.util.data_struct.mini_lru import MiniLru
 from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor, count_avg
+from datatower_ai.src.util.performance.time_monitor import TimeMonitor
 from datatower_ai.src.util.type_check import is_str
 
 try:
@@ -25,12 +27,22 @@ from urllib3 import Retry
 
 
 class _RequestOversizeException(DTException):
-    def __init__(self, factor):
+    def __init__(self, factor, compress_rate, compressed_size):
         self.__factor = factor
+        self.__compression_rate = compress_rate
+        self.__compressed_size = compressed_size
 
     @property
     def factor(self):
         return self.__factor
+
+    @property
+    def compression_rate(self):
+        return self.__compression_rate
+
+    @property
+    def compressed_size(self):
+        return self.__compressed_size
 
 
 class _DataSeparator:
@@ -51,30 +63,35 @@ def _gzip_string(data):
 
 class _HttpService(object):
     """
-    内部类，用于发送网络请求
-
-    指定接收端地址和项目 APP ID, 实现向接收端上传数据的接口. 发送前将数据默认使用 Gzip 压缩,
+    Internal class that handles HTTP requests
     """
-    _simulate = None
+
+    __MB = 1024 * 1024
+    __MAX_SIZE = 8 * __MB
+
     DEFAULT_SERVER_URL = "https://s2s.roiquery.com/sync"
 
-    __session_cache = MiniLru(5, on_drop=lambda _, s: s.close())
+    _simulate = None
+    __session = None
 
     def __init__(self, timeout=3000, retries=3, compress=True):
         self.timeout = timeout
         self.compress = compress
         self.retries = retries
+        if _HttpService.__session is None:
+            _HttpService.__session = self.__create_session()
 
     def post_event(self, server_url, app_id, token, data, length):
-        """使用 Requests 发送数据给服务器
+        """Post data to BE
 
-        Args:
-            data: 待发送的数据
-            length
-
-        Raises:
-            DTIllegalDataException: 数据错误
-            DTNetworkException: 网络错误
+        :param server_url: URL of the server
+        :param app_id: App id
+        :param token: Token
+        :param data: Data to send
+        :param length: Length of data
+        :raise DTNetworkException: Issues related with the network.
+        :raise DTIllegalDataException: Network is ok, but the data sent is not valid that BE responses different status
+        code.
         """
         from datatower_ai.__version__ import __version__
         headers = {'app_id': app_id, 'DT-type': 'python-sdk', 'sdk-version': __version__,
@@ -82,49 +99,69 @@ class _HttpService(object):
 
         return self.__post(url=server_url, data=data, headers=headers)
 
-    def post_raw(self, url, data, headers=None):
-        try:
+    def post_raw(self, url, data, headers=None, catch_exceptions=True):
+        if catch_exceptions:
+            try:
+                return self.__post(url=url, data=data, headers=headers)
+            except:
+                Logger.exception("[HttpService] post_raw")
+                return False
+        else:
             return self.__post(url=url, data=data, headers=headers)
-        except:
-            Logger.exception("[HttpService] post_raw")
-            return False
 
     def __post(self, url, data, headers=None):
         if headers is None:
             headers = {}
 
+        compress_rate = 1
         if is_str(data) or type(data) is bytes:
             compress_type = 'gzip'
             if self.compress:
+                timer = TimeMonitor().start("http_avg_compress_duration")
                 encoded = data if type(data) is bytes else data.encode("utf-8")
                 data = _gzip_string(encoded)
 
-                count_avg("http_avg_compress_rate", len(encoded) / len(data), 1000, 5)
+                compress_rate = len(encoded) / len(data)
+                count_avg("http_avg_compress_rate", compress_rate, 1000, 50)
+                count_avg("http_avg_compressed_size", len(data), 1000, 50)
                 Logger.debug(
                     "[HttpService] avg compress rate: {:.4f}".format(_CounterMonitor["http_avg_compress_rate"]))
+                timer.stop()
             else:
                 compress_type = 'none'
                 data = data if type(data) is bytes else data.encode("utf-8")
             headers['compress'] = compress_type
 
         if len(data) > _HttpService.__MAX_SIZE:
-            Logger.warning("[HttpService] Data is oversize, will try to split and resend, {} > {}".format(
-                len(data), _HttpService.__MAX_SIZE)
+            old_avg = _CounterMonitor["http_avg_compress_rate"].value
+            delta = len(data) / _HttpService.__MAX_SIZE             # guarantees to > 1
+            _CounterMonitor["http_avg_compress_rate"] /= delta      # penalty on avg compress rate
+            Logger.warning(
+                "[HttpService] Data is oversize ({:.0f}b > {:.0f}b), will try to split and resend. "
+                "Put ACR penalty into effect: {:.2f} -> {:.2f}".format(
+                    len(data), _HttpService.__MAX_SIZE, old_avg, _CounterMonitor["http_avg_compress_rate"].value
+                )
             )
-            raise _RequestOversizeException(len(data) / _HttpService.__MAX_SIZE)
+            raise _RequestOversizeException(delta, compress_rate, len(data))
 
-        if Logger.is_print and _HttpService._simulate is not None:
+        from datatower_ai.src.util._holder import _Holder
+        if _Holder.debug and _HttpService._simulate is not None:
+            # Simulating the network request. Only works on Debug mode.
+            timer = TimeMonitor().start("http_post")
             success = _HttpService._simulate >= 0
             Logger.info(
                 "[HttpService] Simulating the HttpService result -> {}, {}".format(success, _HttpService._simulate))
             time.sleep(max(0, _HttpService._simulate / 1000))
+            timer.stop()
             return success
 
         try:
+            timer = TimeMonitor().start("http_post")
             url = urlparse(url).geturl()
-            session = _HttpService.__session_cache.get_or_put(url, put_func=lambda: self.__create_session())
+            session = self.__session
 
             response = session.post(url, data=data, headers=headers, timeout=self.timeout)
+            timer.stop()
 
             if response.status_code == 200:
                 response_data = json.loads(response.text)
@@ -146,71 +183,62 @@ class _HttpService(object):
         except Exception as e:
             raise DTNetworkException(PAGER_CODE_SUB_NETWORK_OTHER, "Http failed due to " + repr(e))
 
-    __MB = 1024 * 1024
-    __MAX_SIZE = 1 * __MB
-
-    @staticmethod
-    def approx_split_data_by_mb(data, target=1, to_str=lambda x: x):
-        """Divide the data to approximate size of {target} mb (after compress, with dynamic compress rate)"""
-        avg_compress_rate = _CounterMonitor["http_avg_compress_rate"].value
-        Logger.debug("Current average compress rate: {}".format(avg_compress_rate))
-        if len(data) == 0:
-            return []
-
-        from datatower_ai.src.util.performance.time_monitor import TimeMonitor
-        timer_split = TimeMonitor().start("ns_split_data")
-
-        if avg_compress_rate <= 0:
-            avg_compress_rate = 15  # default value
-
-        target_mb = target * _HttpService.__MB
-
-        result = []
-        group = []
-        size = 0
-        for item in data:
-            if type(item) is _DataSeparator:
-                print("---> Met the _DataSeparator, size: {}".format(size))
-                if len(group) > 0:
-                    result.append(group)
-                group = []
-                size = 0
-                continue
-
-            if type(item) is bytes:
-                encoded = item
-            else:
-                stringed = to_str(item)
-                if type(stringed) is not str:
-                    timer_split.stop(one_shot=True)
-                    return [data]
-                encoded = stringed.encode("utf-8")
-            item_size = len(encoded) / avg_compress_rate
-            if size + item_size >= target_mb:
-                print("---> Met the target mb, size: {}, {}".format(size, size + item_size))
-                if len(group) == 0:
-                    result.append([encoded])
-                    size = 0
-                else:
-                    result.append(group)
-                    group = [encoded]
-                    size = item_size
-            else:
-                group.append(encoded)
-                size += item_size
-
-        if len(group) > 0:
-            result.append(group)
-
-        new_avg_len = count_avg("http_avg_compress_len", len(data) / len(result), 1000000, 1000)
-        duration = timer_split.stop(one_shot=False)
-
-        Logger.debug("Current average upload count per request: {}, duration: {}".format(new_avg_len, duration))
-
-        return result
-
     def __create_session(self):
         session = requests.Session()
         retry = Retry(total=self.retries, backoff_factor=0.3)
-        session.mount("https://", HTTPAdapter(max_retries=retry))
+        session.mount("https://", HTTPAdapter(max_retries=retry))       # default 4 https
+        session.mount("http://", HTTPAdapter(max_retries=retry))        # default 4 http
         return session
+
+
+if __name__ == "__main__":
+    import logging
+    logging.basicConfig(level=logging.DEBUG, format="%(message)s")
+    n = 100
+
+    def log(msg):
+        logging.disable(0)
+        logging.info(msg)
+        logging.disable(1000)
+
+    # raw
+    # log("Starts to run method 1...")
+    # beg = time.time()
+    # for i in range(n):
+    #     _ = requests.get("https://kotlinlang.org/")
+    #     _ = requests.get("https://www.python.org/")
+    # time_1 = time.time() - beg
+    # log("method 1 time taken: {:.2f}s, avg: {:.2f}s".format(time_1, time_1/n/2))
+
+    # session
+    log("Starts to run method 2...")
+    ts_beg = time.time()
+    ts_session = requests.Session()
+    for _ in range(n):
+        _ = ts_session.get("https://kotlinlang.org/")
+        _ = ts_session.get("https://www.python.org/")
+    time_2 = time.time() - ts_beg
+    log("method 2 time taken: {:.2f}s, avg: {:.2f}s".format(time_2, time_2/n/2))
+
+    # session, separate session
+    # log("Starts to run method 3...")
+    # beg = time.time()
+    # session = requests.Session()
+    # session2 = requests.Session()
+    # for _ in range(n):
+    #     _ = session.get("https://kotlinlang.org/")
+    #     _ = session2.get("https://www.python.org/")
+    # time_3 = time.time() - beg
+    # log("method 3 time taken: {:.2f}s, avg: {:.2f}s".format(time_3, time_3/n/2))
+
+    # session, separate adapter
+    log("Starts to run method 4...")
+    ts_beg = time.time()
+    ts_session = requests.Session()
+    ts_session.mount("https://kotlinlang.org", HTTPAdapter())
+    ts_session.mount("https://www.python.org", HTTPAdapter())
+    for _ in range(n):
+        _ = ts_session.get("https://kotlinlang.org/")
+        _ = ts_session.get("https://www.python.org/")
+    time_4 = time.time() - ts_beg
+    log("method 4 time taken: {:.2f}s, avg: {:.2f}s".format(time_4, time_4/n/2))

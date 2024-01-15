@@ -59,7 +59,7 @@ class DTAnalyticsUtils(_DTApi):
         key = self.__get_key(event_name, dt_id, acid)
         timer = self.__timers.get(key, None)
         if timer is not None:
-            duration = timer.stop(one_shot=True)
+            duration = timer.stop(should_record=False)
             del self.__timers[key]
             if duration >= 0:
                 if properties is None:

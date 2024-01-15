@@ -35,12 +35,16 @@ class TmTimer(object):
             self.__start_time = time.time()
             self.__status = 0
         else:
-            Logger.warning("[TimeMonitor] Timer resume is called (\"%s\") but the timer is not paused (%d)!" % (self.__key, self.__status))
+            Logger.warning("[TimeMonitor] Timer resume is called (\"%s\") but the timer is not paused (%d)!" % (
+                self.__key, self.__status))
 
-    def stop(self, one_shot = True):
+    def stop(self, should_record=True):
         """Get current time used from start to stop except pausing gap in milliseconds, -1 if such index not start yet.
 
-        :param one_shot: Only use once. If True, will not be saved and not track further state (e.g. sum, avg).
+        :param should_record: `bool` or `Function(float) -> bool`
+            - bool, should record.
+            - A function with parameter `time_taken` in milliseconds and returns bool value indicating
+        should this timer be recorded which tracks further state (e.g. sum, avg).
         """
         if self.__status == 2:
             Logger.warning("[TimeMonitor] Timer stop is called (\"%s\") but the timer is stopped already!" % self.__key)
@@ -49,11 +53,14 @@ class TmTimer(object):
         if self.__status == 0:
             self.__total_time += time.time() - self.__start_time
 
+        time_token_ms = self.__total_time * 1000
+
         self.__status = 2
         self.__start_time = 0
-        if not one_shot and self.__record_func is not None and self.__key is not None:
+        record = should_record if type(should_record) is bool else should_record(time_token_ms)
+        if record and self.__record_func is not None and self.__key is not None:
             self.__record_func(self.__key, self.__total_time)
-        return self.__total_time * 1000
+        return time_token_ms
 
     def peek(self):
         """Peek the current time elapsed in milliseconds.
@@ -65,16 +72,15 @@ class TmTimer(object):
 
 
 class ContextTmTimer(TmTimer):
-    def __init__(self, key=None, record_func=None,
-                 one_shot = True):
+    def __init__(self, key=None, record_func=None, should_record=True):
         super(ContextTmTimer, self).__init__(key=key, record_func=record_func)
-        self.__one_shot = one_shot
+        self.__should_record = should_record
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.stop(one_shot=self.__one_shot)
+        self.stop(should_record=self.__should_record)
         return False
 
 
@@ -96,13 +102,13 @@ class TimeMonitor(Singleton):
     __sem = Semaphore()
 
     def __init__(self):
-        self.__table = {}     # {"key": (avg, count)}
+        self.__table = {}  # {"key": (avg, count)}
 
     def start(self, key):
         return TmTimer(key, self._record)
 
-    def start_with(self, key, one_shot = False):
-        return ContextTmTimer(key, self._record, one_shot)
+    def start_with(self, key, should_record=True):
+        return ContextTmTimer(key, self._record, should_record=should_record)
 
     def _record(self, key, elapsed):
         is_get = TimeMonitor.__sem.acquire()
@@ -117,26 +123,30 @@ class TimeMonitor(Singleton):
         """Sum of time performance of such index in milliseconds,
         -1 if such index is not counted yet
         """
-        if key not in self.__table:
-            return -1
-        return self.__table[key][0] * self.__table[key][1] * 1000
+        with TimeMonitor.__sem:
+            if key not in self.__table:
+                return -1
+            return self.__table[key][0] * self.__table[key][1] * 1000
 
     def get_avg(self, key):
         """Average of time performance of such index in milliseconds,
         -1 if such index is not counted yet
         """
-        if key not in self.__table:
-            return -1
-        return self.__table[key][0] * 1000
+        with TimeMonitor.__sem:
+            if key not in self.__table:
+                return -1
+            return self.__table[key][0] * 1000
 
     def get_count(self, key):
-        if key not in self.__table:
-            return -1
-        return self.__table[key][1]
+        with TimeMonitor.__sem:
+            if key not in self.__table:
+                return -1
+            return self.__table[key][1]
 
     def delete(self, key):
-        if key not in self.__table:
-            return ()
-        tp = self.__table[key]
-        del self.__table[key]
-        return tp
+        with TimeMonitor.__sem:
+            if key not in self.__table:
+                return ()
+            tp = self.__table[key]
+            del self.__table[key]
+            return tp

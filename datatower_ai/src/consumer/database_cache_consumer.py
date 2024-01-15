@@ -48,13 +48,13 @@
 #         self.__network_wm = WorkerManager("db_cache_network", max(1, num_network_threads), keep_alive_ms=thread_keep_alive_ms,
 #                                           on_all_workers_stop=lambda: network_timer.pause(),
 #                                           on_all_worker_revived=lambda: network_timer.resume(),
-#                                           on_terminate=lambda: network_timer.stop(one_shot=False))
+#                                           on_terminate=lambda: network_timer.stop())
 #
 #         database_timer = TimeMonitor().start("db_cache_database")
 #         self.__db_wm = WorkerManager("db_cache_database", max(1, num_db_threads), keep_alive_ms=thread_keep_alive_ms,
 #                                      on_all_workers_stop=lambda: database_timer.pause(),
 #                                      on_all_worker_revived=lambda: database_timer.resume(),
-#                                      on_terminate=lambda: database_timer.stop(one_shot=False))
+#                                      on_terminate=lambda: database_timer.stop())
 #
 #         self.__http_service = _HttpService(max(0, network_timeout), max(0, network_retries))
 #         self.__app_id = app_id
@@ -88,7 +88,7 @@
 #         _DTDatabase().get_by_app_id(self.__app_id).event_dao.insert_batch(
 #             cache_size, strategy, *events
 #         )
-#         timer.stop(one_shot=False)
+#         timer.stop()
 #         _CounterMonitor["UploadFromDbTask-insert"] += len(events)
 #
 #         self.__db_wm.execute(self.__query_from_db)
@@ -231,12 +231,12 @@
 #         if success:
 #             timer = TimeMonitor().start("UploadFromDbTask-delete")
 #             self.__db_wm.execute(lambda: _DTDatabase().get_by_app_id(self.__app_id).event_dao.delete_by_ids(ids))
-#             timer.stop(one_shot=False)
+#             timer.stop()
 #             _CounterMonitor["UploadFromDbTask-delete"] += len(ids)
 #         else:
 #             timer = TimeMonitor().start("UploadFromDbTask-update_unquired")
 #             self.__db_wm.execute(lambda: _DTDatabase().get_by_app_id(self.__app_id).event_dao.restore_to_unqueried(ids))
-#             timer.stop(one_shot=False)
+#             timer.stop()
 #             _CounterMonitor["UploadFromDbTask-update_unquired"] += len(ids)
 #
 #         Logger.log("[Upload Statistic] total success: %s, total failed: %s" % (
@@ -287,7 +287,7 @@
 #         except:
 #             Logger.exception("[UploadTask] send failed!")
 #         finally:
-#             timer.stop(one_shot=False)
+#             timer.stop()
 #             _CounterMonitor["UploadFromDbTask-send"] += len(self.__entities) if is_success else 0
 #
 #         if is_success:

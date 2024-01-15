@@ -62,15 +62,19 @@ def handle(dt, args):
         print("[TEST2] Starting task with size: {}, round: {}, time elapsed: {:.2f}ms, avg upload time: {:.2f}ms, "
               "track count: {}, uploaded count: {}, "
               "queue size: {}, inserted to queue: {}, dropped: {}, "
-              "avg compress rate: {:.4f}, avg upload count: {:.2f}, "
-              "flush buffer size: {}, avg splits per flush: {:.2f}, "
-              "avg data split duration: {:.2f}ms, avg fetch from queue duration: {:.2f}ms, avg upload phase duration: {:.2f}ms".format(
+              "avg compress rate: {:.4f}, avg num groups per add: {:.2f}, "
+              "avg flush buffer len: {:.2f}, avg flush buffer size: {:.2f}b, "
+              "avg compressed size: {:.2f}b, "
+              "avg fetch from queue duration: {:.2f}ms, avg compress duration: {:.2f}ms, "
+              "avg post duration: {:.2f}ms, avg upload phase duration: {:.2f}ms".format(
             size, rounds, (crt_time - beg_time) * 1000, tm.get_avg("async_batch-upload"),
             _CounterMonitor["events"], _CounterMonitor["async_batch-upload_success"],
-            _CounterMonitor["async_batch-queue_size"], _CounterMonitor["async_batch-insert"], _CounterMonitor["async_batch-drop"],
-            _CounterMonitor["http_avg_compress_rate"].value, _CounterMonitor["http_avg_compress_len"].value,
-            _CounterMonitor["async_batch-flush_buffer_size"], _CounterMonitor["async_batch-avg_split_per_flush"].value,
-            tm.get_avg("ns_split_data"), tm.get_avg("async_batch-upload_fetch_from_queue"), tm.get_avg("async_batch-upload_total")
+            _CounterMonitor["async_batch-queue_len"], _CounterMonitor["async_batch-insert"], _CounterMonitor["async_batch-drop"],
+            _CounterMonitor["http_avg_compress_rate"].value, _CounterMonitor["avg_num_groups_per_add"].value,
+            _CounterMonitor["async_batch-avg_flush_buffer_len"].value, _CounterMonitor["async_batch-avg_flush_buffer_size"].value,
+            _CounterMonitor["http_avg_compressed_size"].value,
+            tm.get_avg("async_batch-upload_fetch_from_queue"), tm.get_avg("http_avg_compress_duration"),
+            tm.get_avg("http_post"), tm.get_avg("async_batch-upload_total")
         ))
 
         if size < wm_size:

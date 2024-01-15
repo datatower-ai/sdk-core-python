@@ -216,7 +216,7 @@ class DTEventDao:
     def __set_to_queried(c, *ids):
         timer = TimeMonitor().start_with("event_dao-set_queried")
         c.executemany(DTEventEntity.set_queried_statement(True), ids)
-        timer.stop(one_shot=False)
+        timer.stop()
         _CounterMonitor["event_dao-set_queried"] += len(ids)
 
     def restore_to_unqueried(self, ids):

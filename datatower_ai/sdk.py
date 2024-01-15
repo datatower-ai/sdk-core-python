@@ -48,6 +48,9 @@ class DTAnalytics(_DTApi):
         }
         Logger.set(debug, log_level)
 
+        from datatower_ai.src.util._holder import _Holder
+        _Holder.debug = debug
+
         self.__ad = DTAdReport(consumer, debug)
         self.__analytics_utils = DTAnalyticsUtils(consumer, debug)
 

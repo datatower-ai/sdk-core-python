@@ -121,23 +121,23 @@ class _CounterMonitorMeta(type):
     
     @staticmethod
     def _op(key, op):
-        _CounterMonitor.__locker.acquire_write()
-        ov = _CounterMonitor.__table.get(key, 0)
-        _CounterMonitor.__table[key] = op(ov)
-        _CounterMonitor.__locker.release_write()
+        _CounterMonitorMeta.__locker.acquire_write()
+        ov = _CounterMonitorMeta.__table.get(key, 0)
+        _CounterMonitorMeta.__table[key] = op(ov)
+        _CounterMonitorMeta.__locker.release_write()
 
     @staticmethod
     def _get_value(key):
-        _CounterMonitor.__locker.acquire_read()
-        value = _CounterMonitor.__table.get(key, 0)
-        _CounterMonitor.__locker.release_read()
+        _CounterMonitorMeta.__locker.acquire_read()
+        value = _CounterMonitorMeta.__table.get(key, 0)
+        _CounterMonitorMeta.__locker.release_read()
         return value
 
     def __setitem__(cls, key, value):
         v = value if not isinstance(value, _CmCounter) else value.value
-        _CounterMonitor.__locker.acquire_write()
-        _CounterMonitor.__table[key] = v
-        _CounterMonitor.__locker.release_write()
+        _CounterMonitorMeta.__locker.acquire_write()
+        _CounterMonitorMeta.__table[key] = v
+        _CounterMonitorMeta.__locker.release_write()
 
     def __getitem__(cls, item):
         return _CmCounter(item)
@@ -148,6 +148,7 @@ class _CounterMonitor(six.with_metaclass(_CounterMonitorMeta, object)):
 
 
 def count_avg(key, value, max_cnt, long_term_keep):
+    # LSTM-like avg
     old_value = _CounterMonitor[key]
     old_cnt = _CounterMonitor[key + "_avgcnt"]
     new_avg = (old_value * old_cnt + value) / (old_cnt + 1)

@@ -105,7 +105,7 @@ class _DTDatabaseBase:
         """
         timer = TimeMonitor().start("acquire_db_file_lock")
         self.__db_file_lock.acquire()
-        timer.stop(one_shot=False)
+        timer.stop()
         self.__swmr_lock.acquire_write()
         try:
             cursor = self.__conn.cursor()
@@ -127,7 +127,7 @@ class _DTDatabaseBase:
         """
         timer = TimeMonitor().start("acquire_db_file_lock")
         self.__db_file_lock.acquire()
-        timer.stop(one_shot=False)
+        timer.stop()
         self.__swmr_lock.acquire_read()
         try:
             cursor = self.__conn.cursor()

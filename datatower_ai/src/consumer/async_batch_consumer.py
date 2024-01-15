@@ -28,8 +28,8 @@ class AsyncBatchConsumer(_AbstractConsumer):
     2. 数据发送间隔超过预定义的最大时间, 默认为 3 秒
     """
 
-    def __init__(self, app_id, token, server_url=_HttpService.DEFAULT_SERVER_URL, interval=3, flush_size=20,
-                 queue_size=100000, close_retry=1):
+    def __init__(self, app_id, token, server_url=_HttpService.DEFAULT_SERVER_URL, interval=3, flush_size_kb=1024,
+                 queue_size=100000, close_retry=1, num_network_threads=1):
         """
         创建 AsyncBatchConsumer
 
@@ -37,7 +37,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
             app_id: 项目的 APP ID
             token: 通信令牌
             interval: 推送数据的最大时间间隔, 单位为秒, 默认为 3 秒
-            flush_size: 队列缓存的阈值，超过此值将立即进行发送
+            flush_size_kb: 队列缓存的阈值（单位：kilo-byte），超过此值将立即进行发送
             queue_size: 缓存队列的大小
             close_retry: close() 调用时会尝试进行数据的最后上传，使用此值限定失败时的最大重试次数（大于等于 0 时有效，小于 0 为不限制）
         """
@@ -46,17 +46,21 @@ class AsyncBatchConsumer(_AbstractConsumer):
         self.__server_url = server_url
 
         self.__http_service = _HttpService(30000, retries=3)
-        self.__batch = max(1, flush_size)
-        self.__queue = queue.Queue(max(1, queue_size))
+        self.__flush_size_kb = max(1, flush_size_kb)
+        self.__queue = deque()
+        self.__max_queue_size = queue_size
+
+        from datatower_ai.src.util.thread.thread import WorkerManager
+        self.__wm = WorkerManager("AsyncBatchConsumer-wm", size=num_network_threads)
 
         # 初始化发送线程
-        self.__flushing_thread = self._AsyncFlushThread(self, max(0, interval))
+        self.__flushing_thread = self._AsyncFlushThread(self, max(0, interval), self.__wm)
         self.__flushing_thread.daemon = True
         self.__flushing_thread.start()
         self.__app_id = app_id
-        self.__flush_buffer = deque()
         self.__close_retry = close_retry
         self.__sem = threading.Semaphore()
+
 
     def get_app_id(self):
         return self.__app_id
@@ -64,33 +68,64 @@ class AsyncBatchConsumer(_AbstractConsumer):
     def add(self, get_msg):
         self._add(get_msg())
 
-    def _add(self, msgs):
-        cnt = 0
-        try:
-            pre_size = self.__queue.qsize()
+    def _add(self, msgs, no_flush=False):
+        flush_size_b = self.__flush_size_kb * 1024
 
-            for msg in msgs:
-                self.__queue.put_nowait(msg)
-                cnt += 1
-                _CounterMonitor["async_batch-insert"] += 1
-                _CounterMonitor["async_batch-queue_size"] = self.__queue.qsize()
+        if _CounterMonitor["http_avg_compressed_size"] > flush_size_b:
+            _CounterMonitor["http_avg_compress_rate"] -= 0.2        # penalty. if oversize, then decrease the rate
+        avg_compress_rate = _CounterMonitor["http_avg_compress_rate"].value
+        if avg_compress_rate == 0:
+            avg_compress_rate = 15                      # default ACR
+        avg_compress_rate = max(0.01, avg_compress_rate)    # minimum 0.01
 
-            self.__check_is_queue_reached_threshold(pre_size)
-        except queue.Full:
-            _CounterMonitor["async_batch-drop"] += len(msgs) - cnt
-            self.__on_queue_full(len(msgs), cnt)
+        with self.__sem:            # lock for the whole insertion phase, to avoid race overhead.
+            time_add = TimeMonitor().start("async_batch-add")
+            pre_len = len(self.__queue)
+            last = self.__queue[-1] if pre_len != 0 else None
+            group_id, acc_size = 0, 0
+            if last is not None:
+                group_id = last.group_id
+                acc_size = last.acc_size
 
-        if self.__queue.qsize() > self.__batch:
-            self.flush()
+            num_group = 1       # counter
+            i = 0
+            while i < min(len(msgs), self.__max_queue_size-pre_len):
+                msg = msgs[i]
+                encoded = msg if type(msg) is bytes else msg.encode("utf-8")
+                size = len(encoded) / avg_compress_rate         # calc approx size after compressed.
+
+                if acc_size + size >= flush_size_b:
+                    num_group += 1
+                    group_id = (group_id + 1) & 1       # 0 or 1
+                    acc_size = size                     # Resets to current data size
+                    self.__queue.append(_QueueItem(encoded, group_id, acc_size))
+                    if not no_flush:
+                        self.flush()        # notify to flush when reaching flush_size_kb.
+                else:
+                    acc_size += size                    # Increased by current data size
+                    self.__queue.append(_QueueItem(encoded, group_id, acc_size))
+                i += 1
+            _CounterMonitor["async_batch-insert"] += i
+            _CounterMonitor["async_batch-queue_len"] = len(self.__queue)
+
+            if i != len(msgs):
+                # Has at least one event dropped.
+                _CounterMonitor["async_batch-drop"] += len(msgs) - i
+                self.__on_queue_full(len(msgs), i)
+            else:
+                # All events inserted.
+                count_avg("avg_num_groups_per_add", num_group, 1000, 5)
+                self.__check_is_queue_reached_threshold(pre_len)
+            time_add.stop()
 
     def __check_is_queue_reached_threshold(self, pre_size):
-        crt_size = self.__queue.qsize()
-        threshold = self.__queue.maxsize * 0.7
+        crt_size = len(self.__queue)
+        threshold = self.__max_queue_size * 0.7
         if pre_size < threshold < crt_size:
             from datatower_ai.src.util.performance.quality_helper import _DTQualityHelper, _DTQualityLevel, _CODE_ASYNC_BATCH_CONSUMER_QUEUE_REACH_THRESHOLD
             msg = ("Queue is reaching threshold (70%)! Caution: data will not be inserted when queue full. "
-                   "Max size: {}, current size: {}, flush_size: {}, avg upload phase duration: {:.2f}ms").format(
-                self.__queue.maxsize, crt_size, self.__batch, TimeMonitor().get_avg("async_batch-upload_total")
+                   "Max len: {}, current len: {}, flush_size: {}kb, avg upload phase duration: {:.2f}ms").format(
+                self.__max_queue_size, crt_size, self.__flush_size_kb, TimeMonitor().get_avg("async_batch-upload_total")
             )
             _DTQualityHelper().report_quality_message(
                 app_id=self.get_app_id(),
@@ -103,13 +138,13 @@ class AsyncBatchConsumer(_AbstractConsumer):
             self._page_message(
                 PAGER_CODE_CONSUMER_AB_QUEUE_REACH_THRESHOLD,
                 "Queue reaching threshold! size: {} ({:.1f}%).".format(
-                    crt_size, (crt_size / self.__queue.maxsize * 100.0)
+                    crt_size, (crt_size / self.__max_queue_size * 100.0)
                 )
             )
 
     def __on_queue_full(self, crt_batch_len, num_inserted):
-        msg = "Queue is full ({})! Need to add: {}, added: {} and dropped: {}, flush_size: {}, avg upload phase duration: {:.2f}ms".format(
-            self.__queue.maxsize, crt_batch_len, num_inserted, crt_batch_len - num_inserted, self.__batch,
+        msg = "Queue is full ({})! Need to add: {}, added: {} and dropped: {}, flush_size: {}kb, avg upload phase duration: {:.2f}ms".format(
+            self.__max_queue_size, crt_batch_len, num_inserted, crt_batch_len - num_inserted, self.__flush_size_kb,
             TimeMonitor().get_avg("async_batch-upload_total")
         )
         Logger.error("ERROR: " + msg)
@@ -133,8 +168,8 @@ class AsyncBatchConsumer(_AbstractConsumer):
         pre_size = -1
         retried = 0
         # 如果同一批数据发送失败 close_retry 次，则退出循环，以防止无限循环
-        while not self.__queue.empty() or len(self.__flush_buffer) > 0:
-            crt_size = self.__queue.qsize() + len(self.__flush_buffer)
+        while len(self.__queue) > 0:
+            crt_size = len(self.__queue)
             if pre_size == crt_size and self.__close_retry >= 0:
                 if retried < self.__close_retry:
                     retried += 1
@@ -146,13 +181,24 @@ class AsyncBatchConsumer(_AbstractConsumer):
             pre_size = crt_size
             self._perform_request()
 
-        unsent = self.__queue.qsize() + len(self.__flush_buffer)
+        unsent = len(self.__queue)
         if unsent > 0:
             Logger.error("CLOSED with {} records unsent being discarded！".format(unsent))
         AsyncBatchConsumer._print_statistics()
 
     def _need_drain(self):
-        return self.__queue.qsize() > self.__batch
+        if len(self.__queue) == 0:
+            return False
+
+        with self.__sem:
+            if len(self.__queue) == 0:
+                return False
+
+            group_id = self.__queue[0].group_id
+            for item in self.__queue:
+                if item.group_id != group_id:
+                    return True
+        return False
 
     def _perform_request(self):
         """
@@ -160,88 +206,75 @@ class AsyncBatchConsumer(_AbstractConsumer):
 
         仅用于内部调用, 用户不应当调用此方法.
         """
-        global PAGER_CODE_COMMON_NETWORK_ERROR
         timer_ut = TimeMonitor().start("async_batch-upload_total")
 
+        flush_buffer = []
+
+        # get a group of data
         timer_uffq = TimeMonitor().start("async_batch-upload_fetch_from_queue")
         with self.__sem:
-            length = len(self.__flush_buffer)
+            group_id = None
+            if len(self.__queue) != 0:
+                group_id = self.__queue[0].group_id
 
-            while length < self.__batch:
-                try:
-                    self.__flush_buffer.append(str(self.__queue.get_nowait()))
-                    length = len(self.__flush_buffer)
-                except queue.Empty:
-                    break
-        timer_uffq.stop(one_shot=False)
-        _CounterMonitor["async_batch-queue_size"] = self.__queue.qsize()
-        _CounterMonitor["async_batch-flush_buffer_size"] = length
+            size = 0
+            i = 0
+            while i < len(self.__queue) and self.__queue[i].group_id == group_id:
+                data = self.__queue.popleft().data
+                size += len(data)
+                flush_buffer.append(data)
+
+            length = len(flush_buffer)
+            _CounterMonitor["async_batch-queue_len"] = len(self.__queue)
+            count_avg("async_batch-avg_flush_buffer_len", length, 1000, 5)
+            count_avg("async_batch-avg_flush_buffer_size", size, 1000, 5)
+        timer_uffq.stop()
 
         if length > 0:
-            with self.__sem:
-                # split this batch of data to approx 1mb size group.
-                splits = _HttpService.approx_split_data_by_mb(self.__flush_buffer, target=1)
-                self.__flush_buffer = deque()
-
-            count_avg("async_batch-avg_split_per_flush", len(splits), 1000000, 1000)
-
-            for split in splits:
-                success = False
-                factor = 0
-                timer = TimeMonitor().start("async_batch-upload")
-                try:
-                    if len(split) == 0:
-                        success = True
-                    elif type(split[0]) is bytes:
-                        success = self.__http_service.post_event(
-                            self.__server_url, self.__app_id, self.__token, b'[' + b','.join(split) + b']', str(len(split))
-                        )
-                    else:
-                        success = self.__http_service.post_event(
-                            self.__server_url, self.__app_id, self.__token, '[' + ','.join(split) + ']', str(len(split))
-                        )
-                except DTNetworkException as e:
-                    Logger.log("{}, len: {}".format(e, len(split)), level=logging.WARNING)
+            success = False
+            put_back_to_queue = True
+            timer_upload = TimeMonitor().start("async_batch-upload")
+            try:
+                success = self.__http_service.post_event(
+                    self.__server_url, self.__app_id, self.__token, b'[' + b','.join(flush_buffer) + b']', str(length)
+                )
+            except DTNetworkException as e:
+                Logger.log("{}, len: {}".format(e, len(flush_buffer)), level=logging.WARNING)
+                from datatower_ai.src.bean.pager_code import PAGER_CODE_COMMON_NETWORK_ERROR
+                self._page_message(PAGER_CODE_COMMON_NETWORK_ERROR + e.code, repr(e))
+            except DTIllegalDataException as e:
+                Logger.log("{}, len: {}".format(e, len(flush_buffer)), level=logging.WARNING)
+                from datatower_ai.src.bean.pager_code import PAGER_CODE_COMMON_DATA_ERROR
+                self._page_message(PAGER_CODE_COMMON_DATA_ERROR, repr(e))
+            except _RequestOversizeException as e:
+                Logger.warning("Request Oversize, factor: {}, compression rate: {}, compressed size: {}, len: {}".format(
+                    e.factor, e.compression_rate, e.compressed_size, length)
+                )
+                if length == 1:
+                    # a single event is oversize, should be dropped and notify the APIee.
+                    # BE never gonna to handle this.
+                    put_back_to_queue = False
+                    Logger.error("A single event is oversize, this event been dropped!\n{}".format(flush_buffer))
                     from datatower_ai.src.bean.pager_code import PAGER_CODE_COMMON_NETWORK_ERROR
-                    self._page_message(PAGER_CODE_COMMON_NETWORK_ERROR + e.code, repr(e))
-                except DTIllegalDataException as e:
-                    Logger.log("{}, len: {}".format(e, len(split)), level=logging.WARNING)
-                    from datatower_ai.src.bean.pager_code import PAGER_CODE_COMMON_DATA_ERROR
-                    self._page_message(PAGER_CODE_COMMON_DATA_ERROR, repr(e))
-                except _RequestOversizeException as e:
-                    success = False
-                    import math
-                    factor = e.factor
-                finally:
-                    timer.stop(one_shot=False)
+                    from datatower_ai.src.bean.pager_code import PAGER_CODE_SUB_NETWORK_OVERSIZE
+                    self._page_message(
+                        PAGER_CODE_COMMON_NETWORK_ERROR + PAGER_CODE_SUB_NETWORK_OVERSIZE,
+                        "a single event is oversize, this event been dropped!"
+                    )
+                    _CounterMonitor["async_batch-drop"] += 1
+            except Exception as e:
+                Logger.exception("Exception occurred")
+                from datatower_ai.src.bean.pager_code import PAGER_CODE_CONSUMER_AB_UPLOAD_ERROR
+                self._page_message(PAGER_CODE_CONSUMER_AB_UPLOAD_ERROR, repr(e))
+            finally:
+                timer_upload.stop()
 
-                if success:
-                    with self.__sem:
-                        _CounterMonitor["async_batch-upload_success"] += len(split)
-                else:
-                    Logger.warning("Failed to upload events ({})".format(len(split)))
-                    with (self.__sem):
-                        if factor < 1:
-                            for item in split:
-                                self.__flush_buffer.appendleft(item)
-                        elif len(split) == 1:
-                            # Single event is oversize which backend cannot handle it.
-                            from datatower_ai.src.bean.pager_code import PAGER_CODE_SUB_NETWORK_OVERSIZE
-                            self._page_message(
-                                PAGER_CODE_COMMON_NETWORK_ERROR + PAGER_CODE_SUB_NETWORK_OVERSIZE,
-                                "a single event is oversize!"
-                            )
-                        else:
-                            new_size = len(split) // max(0.0, factor + 0.1)
-                            i = 0
-                            for item in split:
-                                self.__flush_buffer.appendleft(item)
-                                i += 1
-                                if i == new_size:
-                                    self.__flush_buffer.appendleft(_DataSeparator())
-                                    i = 1
-                        _CounterMonitor["async_batch-flush_buffer_size"] = len(self.__flush_buffer)
-        timer_ut.stop(one_shot=False)
+            if success:
+                _CounterMonitor["async_batch-upload_success"] += length
+            elif put_back_to_queue:
+                # If failed, putting the current group of data back to the caching queue.
+                self._add(flush_buffer, no_flush=True)
+        timer_ut.stop(should_record=length > 0)
 
     @staticmethod
     def _print_statistics():
@@ -257,15 +290,17 @@ class AsyncBatchConsumer(_AbstractConsumer):
         Logger.log("[Statistics] 'uploaded' count: {}".format(_CounterMonitor["async_batch-upload_success"]))
         Logger.log("="*80)
 
-    class _AsyncFlushThread(threading.Thread):
-        def __init__(self, consumer, interval):
+    class _AsyncFlushThread(threading.Thread):      # Trigger thread
+        def __init__(self, consumer, interval, wm):
             threading.Thread.__init__(self)
             self._consumer = consumer
             self._interval = interval
+            self._wm = wm               # Actual worker thread
 
             self._stop_event = threading.Event()
             self._finished_event = threading.Event()
             self._flush_event = threading.Event()
+
 
         def flush(self):
             self._flush_event.set()
@@ -286,10 +321,30 @@ class AsyncBatchConsumer(_AbstractConsumer):
                     self._flush_event.set()
                 # 如果 _flush_event 标志位为 True，或者等待超过 _interval 则继续执行
                 self._flush_event.wait(self._interval)
-                self._consumer._perform_request()
+                self._wm.execute(self._consumer._perform_request)
                 self._flush_event.clear()
 
                 # 发现 stop 标志位时安全退出
                 if self._stop_event.isSet():
+                    self._wm.terminate()    # 关闭 worker manager
                     break
             self._finished_event.set()
+
+
+class _QueueItem(object):
+    def __init__(self, data, group_id, acc_size):
+        self.__data = data              # encoded data
+        self.__group_id = group_id      # group identifier
+        self.__acc_size = acc_size      # current sum of data size in group
+
+    @property
+    def data(self):
+        return self.__data
+
+    @property
+    def group_id(self):
+        return self.__group_id
+
+    @property
+    def acc_size(self):
+        return self.__acc_size
