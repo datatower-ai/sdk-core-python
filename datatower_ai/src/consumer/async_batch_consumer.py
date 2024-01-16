@@ -69,6 +69,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
         self._add(get_msg())
 
     def _add(self, msgs, no_flush=False):
+        time_at = TimeMonitor().start("async_batch-add_total")
         flush_size_b = self.__flush_size_kb * 1024
 
         if _CounterMonitor["http_avg_compressed_size"] > flush_size_b:
@@ -117,6 +118,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
                 count_avg("avg_num_groups_per_add", num_group, 1000, 5)
                 self.__check_is_queue_reached_threshold(pre_len)
             time_add.stop()
+        time_at.stop()
 
     def __check_is_queue_reached_threshold(self, pre_size):
         crt_size = len(self.__queue)
@@ -266,14 +268,14 @@ class AsyncBatchConsumer(_AbstractConsumer):
                 Logger.exception("Exception occurred")
                 from datatower_ai.src.bean.pager_code import PAGER_CODE_CONSUMER_AB_UPLOAD_ERROR
                 self._page_message(PAGER_CODE_CONSUMER_AB_UPLOAD_ERROR, repr(e))
-            finally:
-                timer_upload.stop()
 
             if success:
                 _CounterMonitor["async_batch-upload_success"] += length
             elif put_back_to_queue:
                 # If failed, putting the current group of data back to the caching queue.
                 self._add(flush_buffer, no_flush=True)
+
+            timer_upload.stop()
         timer_ut.stop(should_record=length > 0)
 
     @staticmethod

@@ -66,23 +66,29 @@ def handle(dt, args):
               "avg flush buffer len: {:.2f}, avg flush buffer size: {:.2f}b, "
               "avg compressed size: {:.2f}b, "
               "avg fetch from queue duration: {:.2f}ms, avg compress duration: {:.2f}ms, "
-              "avg post duration: {:.2f}ms, avg upload phase duration: {:.2f}ms".format(
+              "avg post duration: {:.2f}ms, avg upload phase duration: {:.2f}ms, "
+              "avg add time: {:.2f}ms, avg total add time: {:.2f}ms".format(
             size, rounds, (crt_time - beg_time) * 1000, tm.get_avg("async_batch-upload"),
             _CounterMonitor["events"], _CounterMonitor["async_batch-upload_success"],
-            _CounterMonitor["async_batch-queue_len"], _CounterMonitor["async_batch-insert"], _CounterMonitor["async_batch-drop"],
+            _CounterMonitor["async_batch-queue_len"], _CounterMonitor["async_batch-insert"],
+            _CounterMonitor["async_batch-drop"],
             _CounterMonitor["http_avg_compress_rate"].value, _CounterMonitor["avg_num_groups_per_add"].value,
-            _CounterMonitor["async_batch-avg_flush_buffer_len"].value, _CounterMonitor["async_batch-avg_flush_buffer_size"].value,
+            _CounterMonitor["async_batch-avg_flush_buffer_len"].value,
+            _CounterMonitor["async_batch-avg_flush_buffer_size"].value,
             _CounterMonitor["http_avg_compressed_size"].value,
             tm.get_avg("async_batch-upload_fetch_from_queue"), tm.get_avg("http_avg_compress_duration"),
-            tm.get_avg("http_post"), tm.get_avg("async_batch-upload_total")
+            tm.get_avg("http_post"), tm.get_avg("async_batch-upload_total"),
+            tm.get_avg("async_batch-add"), tm.get_avg("async_batch-add_total")
         ))
 
         if size < wm_size:
             worker_manager.execute(lambda: track(worker_manager, size, dt, event_name, props, meta))
         else:
-            for _ in range(wm_size-1):
-                worker_manager.execute(lambda: track(worker_manager, size//wm_size, dt, event_name, props, meta))
-            worker_manager.execute(lambda: track(worker_manager, (size//wm_size) + (size%wm_size), dt, event_name, props, meta))
+            for _ in range(wm_size - 1):
+                worker_manager.execute(lambda: track(worker_manager, size // wm_size, dt, event_name, props, meta))
+            worker_manager.execute(
+                lambda: track(worker_manager, (size // wm_size) + (size % wm_size), dt, event_name, props, meta)
+            )
 
         rounds += 1
         delta = time.time() - crt_time
@@ -91,11 +97,11 @@ def handle(dt, args):
 
 def init_parser(parser):
     parser.add_argument("json", type=str, help=None)
-    parser.add_argument("--gap", type=int, default=1000, help=None)             # 间隔时间
-    parser.add_argument("--init_size", type=int, default=1, help=None)          # 初始大小
-    parser.add_argument("--incr_beg_offset", type=int, default=1000, help=None)    # 多久后开始增量
-    parser.add_argument("--incr_gap", type=int, default=1000, help=None)        # 增量间隔时间
-    parser.add_argument("--incr_size", type=int, default=0, help=None)          # 每次增量大小
-    parser.add_argument("--max_size", type=int, default=1, help=None)           # 最大大小
+    parser.add_argument("--gap", type=int, default=1000, help=None)  # 间隔时间
+    parser.add_argument("--init_size", type=int, default=1, help=None)  # 初始大小
+    parser.add_argument("--incr_beg_offset", type=int, default=1000, help=None)  # 多久后开始增量
+    parser.add_argument("--incr_gap", type=int, default=1000, help=None)  # 增量间隔时间
+    parser.add_argument("--incr_size", type=int, default=0, help=None)  # 每次增量大小
+    parser.add_argument("--max_size", type=int, default=1, help=None)  # 最大大小
 
     parser.set_defaults(op=handle)
