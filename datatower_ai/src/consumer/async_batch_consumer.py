@@ -48,7 +48,8 @@ class AsyncBatchConsumer(_AbstractConsumer):
         self.__http_service = _HttpService(30000, retries=3)
         self.__flush_size_kb = max(1, flush_size_kb)
         self.__queue = deque()
-        self.__max_queue_size = queue_size
+        self.__max_queue_size = max(1, queue_size)
+        self.__queue_size = 0
 
         from datatower_ai.src.util.thread.thread import WorkerManager
         self.__wm = WorkerManager("AsyncBatchConsumer-wm", size=num_network_threads)
@@ -69,6 +70,9 @@ class AsyncBatchConsumer(_AbstractConsumer):
         self._add(get_msg())
 
     def _add(self, msgs, no_flush=False):
+        if len(msgs) == 0:
+            return
+
         time_at = TimeMonitor().start("async_batch-add_total")
         flush_size_b = self.__flush_size_kb * 1024
 
@@ -79,54 +83,81 @@ class AsyncBatchConsumer(_AbstractConsumer):
             avg_compress_rate = 15                      # default ACR
         avg_compress_rate = max(0.01, avg_compress_rate)    # minimum 0.01
 
-        with self.__sem:            # lock for the whole insertion phase, to avoid race overhead.
-            time_add = TimeMonitor().start("async_batch-add")
-            pre_len = len(self.__queue)
-            last = self.__queue[-1] if pre_len != 0 else None
-            group_id, acc_size = 0, 0
-            if last is not None:
-                group_id = last.group_id
-                acc_size = last.acc_size
+        tmp_queue = []
+        with self.__sem:
+            num_to_add = max(0, min(len(msgs), self.__max_queue_size-self.__queue_size))
+            pre_len = self.__queue_size
+            approx_queue_size = pre_len + num_to_add
+            self.__queue_size = approx_queue_size         # Occupy the size
+            _CounterMonitor["async_batch-queue_len"] = self.__queue_size
+            last = self.__queue[-1] if len(self.__queue) != 0 else None
 
-            num_group = 1       # counter
-            i = 0
-            while i < min(len(msgs), self.__max_queue_size-pre_len):
-                msg = msgs[i]
-                encoded = msg if type(msg) is bytes else msg.encode("utf-8")
-                size = len(encoded) / avg_compress_rate         # calc approx size after compressed.
+        if num_to_add == 0:
+            with self.__sem:
+                self.__queue_size = len(self.__queue)
+                _CounterMonitor["async_batch-queue_len"] = self.__queue_size
+            time_at.stop(should_record=False)
+            return
 
-                if acc_size + size >= flush_size_b:
-                    num_group += 1
-                    group_id = (group_id + 1) & 1       # 0 or 1
-                    acc_size = size                     # Resets to current data size
-                    self.__queue.append(_QueueItem(encoded, group_id, acc_size))
-                    if not no_flush:
-                        self.flush()        # notify to flush when reaching flush_size_kb.
-                else:
-                    acc_size += size                    # Increased by current data size
-                    self.__queue.append(_QueueItem(encoded, group_id, acc_size))
-                i += 1
-            _CounterMonitor["async_batch-insert"] += i
-            _CounterMonitor["async_batch-queue_len"] = len(self.__queue)
+        time_add = TimeMonitor().start("async_batch-add")
+        group_id, acc_size = 0, 0
+        if last is not None:
+            group_id = last.group_id
+            acc_size = last.acc_size
 
-            if i != len(msgs):
-                # Has at least one event dropped.
-                _CounterMonitor["async_batch-drop"] += len(msgs) - i
-                self.__on_queue_full(len(msgs), i)
+        num_group = 0  # counter
+        i = 0
+        while i < num_to_add:
+            msg = msgs[i]
+            encoded = msg if type(msg) is bytes else msg.encode("utf-8")
+            size = len(encoded) / avg_compress_rate  # calc approx size after compressed.
+
+            if acc_size + size >= flush_size_b:
+                num_group += 1
+                group_id = (group_id + 1) & 1  # 0 or 1
+                acc_size = size  # Resets to current data size
+                tmp_queue.append(_QueueItem(encoded, group_id, acc_size))
             else:
-                # All events inserted.
-                count_avg("avg_num_groups_per_add", num_group, 1000, 5)
-                self.__check_is_queue_reached_threshold(pre_len)
-            time_add.stop()
+                acc_size += size  # Increased by current data size
+                tmp_queue.append(_QueueItem(encoded, group_id, acc_size))
+            i += 1
+        _CounterMonitor["async_batch-insert"] += i
+
+        if i == 0:
+            with self.__sem:
+                self.__queue_size = len(self.__queue)
+                _CounterMonitor["async_batch-queue_len"] = self.__queue_size
+            time_at.stop(should_record=False)
+            return
+
+        if i != len(msgs):
+            # Has at least one event dropped.
+            _CounterMonitor["async_batch-drop"] += len(msgs) - i
+            self.__on_queue_full(len(msgs), i)
+        else:
+            # All events inserted.
+            count_avg("avg_num_groups_per_add", num_group, 100, 5)
+            self.__check_is_queue_reached_threshold(pre_len, approx_queue_size)
+        time_add.stop()
+
+        with self.__sem:
+            group = tmp_queue[0].group_id
+            for item in tmp_queue:
+                if item.group_id != group:
+                    group = item.group_id
+                    if not no_flush:
+                        self.flush()  # notify to flush when reaching flush_size_kb.
+                self.__queue.append(item)
+            self.__queue_size = len(self.__queue)       # Sync the queue size
+            _CounterMonitor["async_batch-queue_len"] = self.__queue_size
         time_at.stop()
 
-    def __check_is_queue_reached_threshold(self, pre_size):
-        crt_size = len(self.__queue)
+    def __check_is_queue_reached_threshold(self, pre_size, crt_size):
         threshold = self.__max_queue_size * 0.7
         if pre_size < threshold < crt_size:
             from datatower_ai.src.util.performance.quality_helper import _DTQualityHelper, _DTQualityLevel, _CODE_ASYNC_BATCH_CONSUMER_QUEUE_REACH_THRESHOLD
             msg = ("Queue is reaching threshold (70%)! Caution: data will not be inserted when queue full. "
-                   "Max len: {}, current len: {}, flush_size: {}kb, avg upload phase duration: {:.2f}ms").format(
+                   "Max len: {}, current len: {}, flush_size: {}kb, avg upload phase time taken: {:.2f}ms").format(
                 self.__max_queue_size, crt_size, self.__flush_size_kb, TimeMonitor().get_avg("async_batch-upload_total")
             )
             _DTQualityHelper().report_quality_message(
@@ -145,7 +176,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
             )
 
     def __on_queue_full(self, crt_batch_len, num_inserted):
-        msg = "Queue is full ({})! Need to add: {}, added: {} and dropped: {}, flush_size: {}kb, avg upload phase duration: {:.2f}ms".format(
+        msg = "Queue is full ({})! Need to add: {}, added: {} and dropped: {}, flush_size: {}kb, avg upload phase time taken: {:.2f}ms".format(
             self.__max_queue_size, crt_batch_len, num_inserted, crt_batch_len - num_inserted, self.__flush_size_kb,
             TimeMonitor().get_avg("async_batch-upload_total")
         )
@@ -215,6 +246,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
         # get a group of data
         timer_uffq = TimeMonitor().start("async_batch-upload_fetch_from_queue")
         with self.__sem:
+            timer_uffqi = TimeMonitor().start("async_batch-upload_fetch_from_queue_in")
             group_id = None
             if len(self.__queue) != 0:
                 group_id = self.__queue[0].group_id
@@ -226,16 +258,20 @@ class AsyncBatchConsumer(_AbstractConsumer):
                 size += len(data)
                 flush_buffer.append(data)
 
+            self.__queue_size = len(self.__queue)
+
             length = len(flush_buffer)
             _CounterMonitor["async_batch-queue_len"] = len(self.__queue)
-            count_avg("async_batch-avg_flush_buffer_len", length, 1000, 5)
-            count_avg("async_batch-avg_flush_buffer_size", size, 1000, 5)
-        timer_uffq.stop()
+            if length > 0:
+                count_avg("async_batch-avg_flush_buffer_len", length, 1000, 5)
+                count_avg("async_batch-avg_flush_buffer_size", size, 1000, 5)
+            timer_uffqi.stop(should_record=length > 0)
+        timer_uffq.stop(should_record=length > 0)
 
+        timer_upload = TimeMonitor().start("async_batch-upload")
         if length > 0:
             success = False
             put_back_to_queue = True
-            timer_upload = TimeMonitor().start("async_batch-upload")
             try:
                 success = self.__http_service.post_event(
                     self.__server_url, self.__app_id, self.__token, b'[' + b','.join(flush_buffer) + b']', str(length)
@@ -274,8 +310,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
             elif put_back_to_queue:
                 # If failed, putting the current group of data back to the caching queue.
                 self._add(flush_buffer, no_flush=True)
-
-            timer_upload.stop()
+        timer_upload.stop(should_record=length > 0)
         timer_ut.stop(should_record=length > 0)
 
     @staticmethod
@@ -285,11 +320,21 @@ class AsyncBatchConsumer(_AbstractConsumer):
             return
         tm = TimeMonitor()
         Logger.log("="*80)
-        Logger.log("[Statistics] 'upload' time used sum: {}, avg: {}".format(
-            tm.get_sum("async_batch-upload"), tm.get_avg("async_batch-upload")
+        Logger.log("[Statistics] add phase time used sum: {}, avg: {}".format(
+            tm.get_sum("async_batch-add_total"), tm.get_avg("async_batch-add_total")
+        ))
+        Logger.log("[Statistics] upload phase time used sum: {}, avg: {}".format(
+            tm.get_sum("async_batch-upload_total"), tm.get_avg("async_batch-upload_total")
         ))
         Logger.log("[Statistics] 'events' count: {}".format(_CounterMonitor["events"]))
         Logger.log("[Statistics] 'uploaded' count: {}".format(_CounterMonitor["async_batch-upload_success"]))
+        Logger.log("[Statistics] 'dropped' count: {}".format(_CounterMonitor["async_batch-drop"]))
+        Logger.log("[Statistics] avgerage number of groups per add: {:.2f}".format(_CounterMonitor["avg_num_groups_per_add"].value))
+        Logger.log("[Statistics] average upload length: {:.2f}, size: {:.2f}B ({:.2f}B)".format(
+            _CounterMonitor["async_batch-avg_flush_buffer_len"].value,
+            _CounterMonitor["async_batch-avg_flush_buffer_size"].value,
+            _CounterMonitor["http_avg_compressed_size"].value
+        ))
         Logger.log("="*80)
 
     class _AsyncFlushThread(threading.Thread):      # Trigger thread
@@ -317,10 +362,9 @@ class AsyncBatchConsumer(_AbstractConsumer):
 
         def run(self):
             while True:
-                Logger.log("run")
-                if self._consumer._need_drain():
-                    # 当当前queue size 大于batch size时，马上发送数据
-                    self._flush_event.set()
+                # if self._consumer._need_drain():
+                #     # 当当前queue size 大于batch size时，马上发送数据
+                #     self._flush_event.set()
                 # 如果 _flush_event 标志位为 True，或者等待超过 _interval 则继续执行
                 self._flush_event.wait(self._interval)
                 self._wm.execute(self._consumer._perform_request)
