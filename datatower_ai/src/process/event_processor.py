@@ -7,8 +7,7 @@ import re
 import time
 
 from datatower_ai.src.bean.event import Event
-from datatower_ai.src.consumer.abstract_consumer import _AbstractConsumer
-from datatower_ai.src.util.exception import DTIllegalDataException, DTMetaDataException
+from datatower_ai.src.util.exception import DTIllegalDataException, DTMetaDataException, DTNetworkException
 from datatower_ai.src.util.logger import Logger
 from datatower_ai.src.util.type_check import is_str, is_number, is_int
 
@@ -44,6 +43,18 @@ class _EventProcessor:
             Logger.exception("Nan or Inf data are not allowed")
             from datatower_ai.src.bean.pager_code import PAGER_CODE_COMMON
             self.__consumer._page_message(PAGER_CODE_COMMON, repr(e))
+        except DTIllegalDataException as e:
+            Logger.exception("Data illegal")
+            from datatower_ai.src.bean.pager_code import PAGER_CODE_COMMON_DATA_ILLEGAL
+            self.__consumer._page_message(PAGER_CODE_COMMON_DATA_ILLEGAL, repr(e))
+        except DTMetaDataException as e:
+            Logger.exception("Meta data illegal")
+            from datatower_ai.src.bean.pager_code import PAGER_CODE_COMMON_DATA_META_ILLEGAL
+            self.__consumer._page_message(PAGER_CODE_COMMON_DATA_META_ILLEGAL, repr(e))
+        except DTNetworkException as e:
+            Logger.exception("Network exception")
+            from datatower_ai.src.bean.pager_code import PAGER_CODE_COMMON_NETWORK_ERROR
+            self.__consumer._page_message(PAGER_CODE_COMMON_NETWORK_ERROR, repr(e))
         except Exception as e:
             # raise e
             Logger.exception("Error occur during processing.")
