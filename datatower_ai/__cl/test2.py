@@ -102,18 +102,37 @@ def handle(dt, args):
             )
 
         (col, row) = getTerminalSize()
-        pinned = "> Time used: {:.2f}ms, round: {}, tracked: {}, uploaded: {}, dropped: {}, queue len: {} ({:.2f}%)".format(
-            (crt_time - beg_time) * 1000,
+        try:
+            import psutil
+            cpu = "{:.1f}%".format(psutil.cpu_percent())
+            mem = "{:.1f}%".format(psutil.virtual_memory()[2])
+        except Exception as e:
+            cpu = "N/A"
+            mem = "N/A"
+
+        tu = int((crt_time - beg_time) * 1000)
+        hr = tu // 3600000
+        mins = tu // 60000 % 60
+        sec = tu // 1000 % 60
+        ms = tu % 1000
+        ts = "{}:{:02d}:{:02d}.{:03d}".format(hr, mins, sec, ms)
+
+        pinned = "> Round: {}, Time used: {}, tracked: {}, uploaded: {}, dropped: {}, queue len: {} ({:.2f}%), avg add time used: {:.2f}ms, avg upload time used: {:.2f}ms, CPU: {}, MEM: {}".format(
             rounds,
+            ts,
             _CounterMonitor["events"],
             _CounterMonitor["async_batch-upload_success"],
             _CounterMonitor["async_batch-drop"],
             _CounterMonitor["async_batch-queue_len"],
-            _CounterMonitor["async_batch-queue_len"] / args.queue_size * 100
+            _CounterMonitor["async_batch-queue_len"] / args.queue_size * 100,
+            tm.get_avg("async_batch-add_total"),
+            tm.get_avg("async_batch-upload_total"),
+            cpu,
+            mem
         )
         import math
-        backs = "\r" * int(math.ceil(len(pinned) / col))
-        print("\033[94m{}{}\033[0m".format(pinned, backs), end="")
+        backs = max(0, int(math.ceil(len(pinned) / col))-1)
+        print("\033[94m{}\033[0m\r".format(pinned), end="\033[{}A".format(backs) if backs > 0 else "")
 
         rounds += 1
         delta = time.time() - crt_time

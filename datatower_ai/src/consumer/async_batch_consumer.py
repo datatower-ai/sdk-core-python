@@ -15,7 +15,7 @@ from datatower_ai.src.util.logger import Logger
 from datatower_ai.src.util.exception import DTNetworkException, DTIllegalDataException
 
 from datatower_ai.src.consumer.abstract_consumer import _AbstractConsumer
-from datatower_ai.src.service.http_service import _HttpService, _RequestOversizeException, _DataSeparator
+from datatower_ai.src.service.http_service import _HttpService, _RequestOversizeException
 from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor, count_avg
 
 
@@ -62,7 +62,6 @@ class AsyncBatchConsumer(_AbstractConsumer):
         self.__close_retry = close_retry
         self.__sem = threading.Semaphore()
 
-
     def get_app_id(self):
         return self.__app_id
 
@@ -92,13 +91,6 @@ class AsyncBatchConsumer(_AbstractConsumer):
             _CounterMonitor["async_batch-queue_len"] = self.__queue_size
             last = self.__queue[-1] if len(self.__queue) != 0 else None
 
-        if num_to_add == 0:
-            with self.__sem:
-                self.__queue_size = len(self.__queue)
-                _CounterMonitor["async_batch-queue_len"] = self.__queue_size
-            time_at.stop(should_record=False)
-            return
-
         time_add = TimeMonitor().start("async_batch-add")
         group_id, acc_size = 0, 0
         if last is not None:
@@ -123,13 +115,6 @@ class AsyncBatchConsumer(_AbstractConsumer):
             i += 1
         _CounterMonitor["async_batch-insert"] += i
 
-        if i == 0:
-            with self.__sem:
-                self.__queue_size = len(self.__queue)
-                _CounterMonitor["async_batch-queue_len"] = self.__queue_size
-            time_at.stop(should_record=False)
-            return
-
         if i != len(msgs):
             # Has at least one event dropped.
             _CounterMonitor["async_batch-drop"] += len(msgs) - i
@@ -138,7 +123,14 @@ class AsyncBatchConsumer(_AbstractConsumer):
             # All events inserted.
             count_avg("avg_num_groups_per_add", num_group, 100, 5)
             self.__check_is_queue_reached_threshold(pre_len, approx_queue_size)
-        time_add.stop()
+
+        time_add.stop(should_record=i > 0)
+        if i == 0:      # nothing to insert
+            with self.__sem:
+                self.__queue_size = len(self.__queue)
+                _CounterMonitor["async_batch-queue_len"] = self.__queue_size
+            time_at.stop(should_record=False)
+            return
 
         with self.__sem:
             group = tmp_queue[0].group_id
@@ -154,7 +146,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
 
     def __check_is_queue_reached_threshold(self, pre_size, crt_size):
         threshold = self.__max_queue_size * 0.7
-        if pre_size < threshold < crt_size:
+        if pre_size < threshold <= crt_size:
             from datatower_ai.src.util.performance.quality_helper import _DTQualityHelper, _DTQualityLevel, _CODE_ASYNC_BATCH_CONSUMER_QUEUE_REACH_THRESHOLD
             msg = ("Queue is reaching threshold (70%)! Caution: data will not be inserted when queue full. "
                    "Max len: {}, current len: {}, flush_size: {}kb, avg upload phase time taken: {:.2f}ms").format(

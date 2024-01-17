@@ -45,10 +45,6 @@ class _RequestOversizeException(DTException):
         return self.__compressed_size
 
 
-class _DataSeparator:
-    pass
-
-
 def _gzip_string(data):
     try:
         return gzip.compress(data)
