@@ -89,6 +89,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
             approx_queue_size = pre_len + num_to_add
             self.__queue_size = approx_queue_size         # Occupy the size
             _CounterMonitor["async_batch-queue_len"] = self.__queue_size
+            count_avg("async_batch-avg_queue_len", self.__queue_size, 10000, 1000)
             last = self.__queue[-1] if len(self.__queue) != 0 else None
 
         time_add = TimeMonitor().start("async_batch-add")
@@ -121,7 +122,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
             self.__on_queue_full(len(msgs), i)
         else:
             # All events inserted.
-            count_avg("avg_num_groups_per_add", num_group, 100, 5)
+            count_avg("avg_num_groups_per_add", num_group, 1000, 50)
             self.__check_is_queue_reached_threshold(pre_len, approx_queue_size)
 
         time_add.stop(should_record=i > 0)
@@ -129,6 +130,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
             with self.__sem:
                 self.__queue_size = len(self.__queue)
                 _CounterMonitor["async_batch-queue_len"] = self.__queue_size
+                count_avg("async_batch-avg_queue_len", self.__queue_size, 10000, 1000)
             time_at.stop(should_record=False)
             return
 
@@ -142,6 +144,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
                 self.__queue.append(item)
             self.__queue_size = len(self.__queue)       # Sync the queue size
             _CounterMonitor["async_batch-queue_len"] = self.__queue_size
+            count_avg("async_batch-avg_queue_len", self.__queue_size, 10000, 1000)
         time_at.stop()
 
     def __check_is_queue_reached_threshold(self, pre_size, crt_size):
@@ -253,7 +256,8 @@ class AsyncBatchConsumer(_AbstractConsumer):
             self.__queue_size = len(self.__queue)
 
             length = len(flush_buffer)
-            _CounterMonitor["async_batch-queue_len"] = len(self.__queue)
+            _CounterMonitor["async_batch-queue_len"] = self.__queue_size
+            count_avg("async_batch-avg_queue_len", self.__queue_size, 10000, 1000)
             if length > 0:
                 count_avg("async_batch-avg_flush_buffer_len", length, 1000, 5)
                 count_avg("async_batch-avg_flush_buffer_size", size, 1000, 5)

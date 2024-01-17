@@ -31,6 +31,14 @@ def pager_func(code, msg):
     print("[TEST2 | PAGER] code: {}, msg: {}".format(code, msg))
 
 
+def safe_handle(dt, args):
+    try:
+        handle(dt, args)
+    except:
+        print("\n"*5)
+        pass
+
+
 def handle(dt, args):
     json_object = json_loads_byteified(args.json)
     props = json_object.pop("properties", None)
@@ -71,7 +79,8 @@ def handle(dt, args):
 
         print("[TEST2] Starting task with size: {}, round: {}, time elapsed: {:.2f}ms, avg upload time: {:.2f}ms, "
               "track count: {}, uploaded count: {}, "
-              "queue size: {}, inserted to queue: {}, dropped: {}, "
+              "queue length: {} (avg: {:.1f}), "
+              "inserted to queue: {}, dropped: {}, "
               "avg compress rate: {:.4f}, avg num groups per add: {:.2f}, "
               "avg flush buffer len: {:.2f}, avg flush buffer size: {:.2f}b, "
               "avg compressed size: {:.2f}b, "
@@ -80,8 +89,8 @@ def handle(dt, args):
               "avg add time: {:.2f}ms, avg total add time: {:.2f}ms".format(
                 size, rounds, (crt_time - beg_time) * 1000, tm.get_avg("async_batch-upload"),
                 _CounterMonitor["events"], _CounterMonitor["async_batch-upload_success"],
-                _CounterMonitor["async_batch-queue_len"], _CounterMonitor["async_batch-insert"],
-                _CounterMonitor["async_batch-drop"],
+                _CounterMonitor["async_batch-queue_len"], _CounterMonitor["async_batch-avg_queue_len"].value,
+                _CounterMonitor["async_batch-insert"], _CounterMonitor["async_batch-drop"],
                 _CounterMonitor["http_avg_compress_rate"].value, _CounterMonitor["avg_num_groups_per_add"].value,
                 _CounterMonitor["async_batch-avg_flush_buffer_len"].value,
                 _CounterMonitor["async_batch-avg_flush_buffer_size"].value,
@@ -110,14 +119,26 @@ def handle(dt, args):
             cpu = "N/A"
             mem = "N/A"
 
-        tu = int((crt_time - beg_time) * 1000)
+        rtu = crt_time - beg_time
+        tu = int(rtu * 1000)
         hr = tu // 3600000
         mins = tu // 60000 % 60
         sec = tu // 1000 % 60
         ms = tu % 1000
         ts = "{}:{:02d}:{:02d}.{:03d}".format(hr, mins, sec, ms)
 
-        pinned = "> Round: {}, Time used: {}, tracked: {}, uploaded: {}, dropped: {}, queue len: {} ({:.2f}%), avg add time used: {:.2f}ms, avg upload time used: {:.2f}ms, CPU: {}, MEM: {}".format(
+        avg_upload_size = _CounterMonitor["http_avg_compressed_size"].value
+        if avg_upload_size > 1024 * 1024:
+            unit_upload_size = "{:.2f}MB".format(avg_upload_size / 1024 / 1024)
+        elif avg_upload_size > 1024:
+            unit_upload_size = "{:.2f}KB".format(avg_upload_size / 1024)
+        else:
+            unit_upload_size = "{:.2f}B".format(avg_upload_size)
+
+        pinned = (
+            "> Round: {}, Time used: {}, tracked: {}, uploaded: {}, dropped: {}, queue len: {} ({:.2f}%), avg queue len: {:.1f} ({:.2f}%), avg add time used: {:.2f}ms, avg upload time used: {:.2f}ms\n"
+            "> CPU: {}, MEM: {}, approx QPS: {} (avg upload size: {})"
+        ).format(
             rounds,
             ts,
             _CounterMonitor["events"],
@@ -125,14 +146,18 @@ def handle(dt, args):
             _CounterMonitor["async_batch-drop"],
             _CounterMonitor["async_batch-queue_len"],
             _CounterMonitor["async_batch-queue_len"] / args.queue_size * 100,
+            _CounterMonitor["async_batch-avg_queue_len"].value,
+            _CounterMonitor["async_batch-avg_queue_len"].value / args.queue_size * 100,
             tm.get_avg("async_batch-add_total"),
             tm.get_avg("async_batch-upload_total"),
             cpu,
-            mem
+            mem,
+            "{:.2f}".format(_CounterMonitor["async_batch-upload_success"] / rtu) if rtu != 0 else "N/A",
+            unit_upload_size
         )
         import math
         backs = max(0, int(math.ceil(len(pinned) / col))-1)
-        print("\033[94m{}\033[0m\r".format(pinned), end="\033[{}A".format(backs) if backs > 0 else "")
+        print("\033[94m{}\033[0m\r".format(pinned), end="\033[{}A".format(backs + 1))
 
         rounds += 1
         delta = time.time() - crt_time
@@ -173,4 +198,4 @@ def init_parser(parser):
     parser.add_argument("--max_size", type=int, default=1, help=None)  # 最大大小
     parser.add_argument("-batch_api", action="store_true", help=None)  # 是否使用 batch api
 
-    parser.set_defaults(op=handle)
+    parser.set_defaults(op=safe_handle)
