@@ -30,16 +30,18 @@ def track(worker_manager, size, dt, event_name, props, meta, use_batch_api):
 def pager_func(code, msg):
     print("[TEST2 | PAGER] code: {}, msg: {}".format(code, msg))
 
+jump_lines = 1
 
 def safe_handle(dt, args):
     try:
         handle(dt, args)
     except:
-        print("\n"*5)
+        print("\n"*jump_lines)
         pass
 
 
 def handle(dt, args):
+    global jump_lines
     json_object = json_loads_byteified(args.json)
     props = json_object.pop("properties", None)
     meta = json_object
@@ -59,7 +61,7 @@ def handle(dt, args):
         gap, init_size, incr_beg_offset, incr_gap, incr_size, event_name
     ))
 
-    wm_size = 5
+    wm_size = args.num_send_threads
     worker_manager = WorkerManager("test_worker_manager", size=wm_size)
     tm = TimeMonitor()
 
@@ -67,9 +69,10 @@ def handle(dt, args):
     starts_to_incr = False
     last_incr_time = 0
 
+    max_rounds = args.max_rounds
     rounds = 1
     size = init_size
-    while True:
+    while max_rounds is None or rounds <= max_rounds:
         crt_time = time.time()
         if not starts_to_incr and crt_time - beg_time >= (incr_beg_offset / 1000.0):
             starts_to_incr = True
@@ -100,6 +103,7 @@ def handle(dt, args):
                 tm.get_avg("async_batch-add"), tm.get_avg("async_batch-add_total")
               ),
         )
+        jump_lines = print_pinned(args, rounds, beg_time, tm)
 
         if size < wm_size:
             worker_manager.execute(lambda: track(worker_manager, size, dt, event_name, props, meta, use_batch_api))
@@ -110,58 +114,65 @@ def handle(dt, args):
                 lambda: track(worker_manager, (size // wm_size) + (size % wm_size), dt, event_name, props, meta, use_batch_api)
             )
 
-        (col, row) = getTerminalSize()
-        try:
-            import psutil
-            cpu = "{:.1f}%".format(psutil.cpu_percent())
-            mem = "{:.1f}%".format(psutil.virtual_memory()[2])
-        except Exception as e:
-            cpu = "N/A"
-            mem = "N/A"
-
-        rtu = crt_time - beg_time
-        tu = int(rtu * 1000)
-        hr = tu // 3600000
-        mins = tu // 60000 % 60
-        sec = tu // 1000 % 60
-        ms = tu % 1000
-        ts = "{}:{:02d}:{:02d}.{:03d}".format(hr, mins, sec, ms)
-
-        avg_upload_size = _CounterMonitor["http_avg_compressed_size"].value
-        if avg_upload_size > 1024 * 1024:
-            unit_upload_size = "{:.2f}MB".format(avg_upload_size / 1024 / 1024)
-        elif avg_upload_size > 1024:
-            unit_upload_size = "{:.2f}KB".format(avg_upload_size / 1024)
-        else:
-            unit_upload_size = "{:.2f}B".format(avg_upload_size)
-
-        pinned = (
-            "> Round: {}, Time used: {}, tracked: {}, uploaded: {}, dropped: {}, queue len: {} ({:.2f}%), avg queue len: {:.1f} ({:.2f}%), avg add time used: {:.2f}ms, avg upload time used: {:.2f}ms\n"
-            "> CPU: {}, MEM: {}, approx QPS: {} (avg upload size: {})"
-        ).format(
-            rounds,
-            ts,
-            _CounterMonitor["events"],
-            _CounterMonitor["async_batch-upload_success"],
-            _CounterMonitor["async_batch-drop"],
-            _CounterMonitor["async_batch-queue_len"],
-            _CounterMonitor["async_batch-queue_len"] / args.queue_size * 100,
-            _CounterMonitor["async_batch-avg_queue_len"].value,
-            _CounterMonitor["async_batch-avg_queue_len"].value / args.queue_size * 100,
-            tm.get_avg("async_batch-add_total"),
-            tm.get_avg("async_batch-upload_total"),
-            cpu,
-            mem,
-            "{:.2f}".format(_CounterMonitor["async_batch-upload_success"] / rtu) if rtu != 0 else "N/A",
-            unit_upload_size
-        )
-        import math
-        backs = max(0, int(math.ceil(len(pinned) / col))-1)
-        print("\033[94m{}\033[0m\r".format(pinned), end="\033[{}A".format(backs + 1))
-
         rounds += 1
         delta = time.time() - crt_time
         time.sleep(max(0, gap / 1000.0 - delta))
+    print("\n" * jump_lines)
+    worker_manager.terminate()
+
+def print_pinned(args, rounds, beg_time, tm):
+    (col, row) = getTerminalSize()
+    try:
+        import psutil
+        cpu = "{:.1f}%".format(psutil.cpu_percent())
+        mem = "{:.1f}%".format(psutil.virtual_memory()[2])
+    except Exception as e:
+        cpu = "N/A"
+        mem = "N/A"
+
+    rtu = time.time() - beg_time
+    tu = int(rtu * 1000)
+    hr = tu // 3600000
+    mins = tu // 60000 % 60
+    sec = tu // 1000 % 60
+    ms = tu % 1000
+    ts = "{}:{:02d}:{:02d}.{:03d}".format(hr, mins, sec, ms)
+
+    avg_upload_size = _CounterMonitor["http_avg_compressed_size"].value
+    if avg_upload_size > 1024 * 1024:
+        unit_upload_size = "{:.2f}MB".format(avg_upload_size / 1024 / 1024)
+    elif avg_upload_size > 1024:
+        unit_upload_size = "{:.2f}KB".format(avg_upload_size / 1024)
+    else:
+        unit_upload_size = "{:.2f}B".format(avg_upload_size)
+
+    avg_upload_total_time = tm.get_avg("async_batch-upload_total")
+
+    pinned = (
+        "> Round: {}, Time used: {}, tracked: {}, uploaded: {}, dropped: {}, queue len: {} ({:.2f}%), avg queue len: {:.1f} ({:.2f}%), avg add time used: {:.2f}ms, avg upload time used: {:.2f}ms\n"
+        "> CPU: {}, MEM: {}, approx QPS: {} | {} (avg upload size: {})"
+    ).format(
+        rounds,
+        ts,
+        _CounterMonitor["events"],
+        _CounterMonitor["async_batch-upload_success"],
+        _CounterMonitor["async_batch-drop"],
+        _CounterMonitor["async_batch-queue_len"],
+        _CounterMonitor["async_batch-queue_len"] / args.queue_size * 100,
+        _CounterMonitor["async_batch-avg_queue_len"].value,
+        _CounterMonitor["async_batch-avg_queue_len"].value / args.queue_size * 100,
+        tm.get_avg("async_batch-add_total"),
+        avg_upload_total_time,
+        cpu,
+        mem,
+        "{:.2f}".format(_CounterMonitor["async_batch-upload_success"] / rtu) if rtu != 0 else "0.0",
+        "{:.2f}".format(_CounterMonitor["async_batch-avg_upload_success"] * 1000 / avg_upload_total_time) if avg_upload_total_time > 0 else "0.0",
+        unit_upload_size
+    )
+    import math
+    backs = max(0, sum(max(1, int(math.ceil(len(x) / col))) for x in pinned.split("\n")) - 1)
+    print("\033[94m{}\033[0m\r".format(pinned), end="\033[{}A".format(backs))
+    return backs
 
 
 def getTerminalSize():
@@ -197,5 +208,7 @@ def init_parser(parser):
     parser.add_argument("--incr_size", type=int, default=0, help=None)  # 每次增量大小
     parser.add_argument("--max_size", type=int, default=1, help=None)  # 最大大小
     parser.add_argument("-batch_api", action="store_true", help=None)  # 是否使用 batch api
+    parser.add_argument("--num_send_threads", type=int, default=5, help=None)  # 同时调用接口的线程数
+    parser.add_argument("--max_rounds", type=int, default=None, help=None)  # 最大轮数
 
     parser.set_defaults(op=safe_handle)

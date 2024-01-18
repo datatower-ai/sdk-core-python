@@ -121,10 +121,15 @@ class _CounterMonitorMeta(type):
     
     @staticmethod
     def _op(key, op):
-        _CounterMonitorMeta.__locker.acquire_write()
-        ov = _CounterMonitorMeta.__table.get(key, 0)
-        _CounterMonitorMeta.__table[key] = op(ov)
-        _CounterMonitorMeta.__locker.release_write()
+        try:
+            _CounterMonitorMeta.__locker.acquire_write()
+            ov = _CounterMonitorMeta.__table.get(key, 0)
+            _CounterMonitorMeta.__table[key] = op(ov)
+        except:
+            from datatower_ai.src.util.logger import Logger
+            Logger.exception("CounterMonitor op")
+        finally:
+            _CounterMonitorMeta.__locker.release_write()
 
     @staticmethod
     def _get_value(key):

@@ -61,12 +61,14 @@ class AsyncBatchConsumer(_AbstractConsumer):
         self.__app_id = app_id
         self.__close_retry = close_retry
         self.__sem = threading.Semaphore()
+        self.__insert_sem = threading.Semaphore()
 
     def get_app_id(self):
         return self.__app_id
 
     def add(self, get_msg):
-        self._add(get_msg())
+        with self.__insert_sem:
+            self._add(get_msg())
 
     def _add(self, msgs, no_flush=False):
         if len(msgs) == 0:
@@ -75,11 +77,13 @@ class AsyncBatchConsumer(_AbstractConsumer):
         time_at = TimeMonitor().start("async_batch-add_total")
         flush_size_b = self.__flush_size_kb * 1024
 
-        if _CounterMonitor["http_avg_compressed_size"] > flush_size_b:
-            _CounterMonitor["http_avg_compress_rate"] -= 0.2        # penalty. if oversize, then decrease the rate
         avg_compress_rate = _CounterMonitor["http_avg_compress_rate"].value
         if avg_compress_rate == 0:
-            avg_compress_rate = 15                      # default ACR
+            avg_compress_rate = 17                      # default ACR
+        elif _CounterMonitor["http_avg_compressed_size"] > flush_size_b:
+            # penalty. if oversize, then decrease the rate
+            avg_compress_rate = _CounterMonitor["http_avg_compress_rate"] * 0.9
+            _CounterMonitor["http_avg_compress_rate"] = avg_compress_rate
         avg_compress_rate = max(0.01, avg_compress_rate)    # minimum 0.01
 
         tmp_queue = []
@@ -104,7 +108,6 @@ class AsyncBatchConsumer(_AbstractConsumer):
             msg = msgs[i]
             encoded = msg if type(msg) is bytes else msg.encode("utf-8")
             size = len(encoded) / avg_compress_rate  # calc approx size after compressed.
-
             if acc_size + size >= flush_size_b:
                 num_group += 1
                 group_id = (group_id + 1) & 1  # 0 or 1
@@ -303,6 +306,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
 
             if success:
                 _CounterMonitor["async_batch-upload_success"] += length
+                count_avg("async_batch-avg_upload_success", length, 10000, 100)
             elif put_back_to_queue:
                 # If failed, putting the current group of data back to the caching queue.
                 self._add(flush_buffer, no_flush=True)

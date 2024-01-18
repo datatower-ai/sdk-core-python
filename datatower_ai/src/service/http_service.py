@@ -128,18 +128,6 @@ class _HttpService(object):
                 data = data if type(data) is bytes else data.encode("utf-8")
             headers['compress'] = compress_type
 
-        if len(data) > _HttpService.__MAX_SIZE:
-            old_avg = _CounterMonitor["http_avg_compress_rate"].value
-            delta = len(data) / _HttpService.__MAX_SIZE             # guarantees to > 1
-            _CounterMonitor["http_avg_compress_rate"] /= delta      # penalty on avg compress rate
-            Logger.warning(
-                "[HttpService] Data is oversize ({:.0f}b > {:.0f}b), will try to split and resend. "
-                "Put ACR penalty into effect: {:.2f} -> {:.2f}".format(
-                    len(data), _HttpService.__MAX_SIZE, old_avg, _CounterMonitor["http_avg_compress_rate"].value
-                )
-            )
-            raise _RequestOversizeException(delta, compress_rate, len(data))
-
         from datatower_ai.src.util._holder import _Holder
         if _Holder.debug and _HttpService._simulate is not None:
             # Simulating the network request. Only works on Debug mode.
@@ -161,8 +149,25 @@ class _HttpService(object):
 
             if response.status_code == 200:
                 response_data = json.loads(response.text)
-                if response_data["code"] == 0:
+                code = response_data["code"]
+                if code == 0:
                     return True
+                elif code == 11:
+                    print(response_data)
+                    # Request data is oversize, decrease the ACR to avoid recursive error.
+                    _HttpService.__MAX_SIZE = response_data["data"]["max_size"]
+                    data_size = len(data)
+                    old_avg = _CounterMonitor["http_avg_compress_rate"].value
+                    # penalty on avg compress rate, with additional 0.1
+                    delta = max(1, data_size / _HttpService.__MAX_SIZE) + 0.1
+                    _CounterMonitor["http_avg_compress_rate"] /= delta
+                    Logger.warning(
+                        "[HttpService] Data is oversize ({:.0f}b > {:.0f}b), will try to split and resend. "
+                        "Put ACR penalty into effect ({:.2f}): {:.2f} -> {:.2f}".format(
+                            data_size, _HttpService.__MAX_SIZE, delta, old_avg, _CounterMonitor["http_avg_compress_rate"].value
+                        )
+                    )
+                    raise _RequestOversizeException(delta, compress_rate, len(data))
                 else:
                     raise DTIllegalDataException("Unexpected result code: " + str(response_data["code"])
                                                  + " reason: " + response_data["msg"])
