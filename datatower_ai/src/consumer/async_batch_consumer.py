@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import time
 from collections import deque
 
 from datatower_ai.src.util.performance.time_monitor import TimeMonitor
@@ -55,9 +56,9 @@ class AsyncBatchConsumer(_AbstractConsumer):
         self.__wm = WorkerManager("AsyncBatchConsumer-wm", size=num_network_threads)
 
         # 初始化发送线程
-        self.__flushing_thread = self._AsyncFlushThread(self, max(0, interval), self.__wm)
-        self.__flushing_thread.daemon = True
-        self.__flushing_thread.start()
+        self.__timer_thread = self._TimerThread(self, max(0, interval), self.__wm)
+        self.__timer_thread.daemon = True
+        self.__timer_thread.start()
         self.__app_id = app_id
         self.__close_retry = close_retry
         self.__sem = threading.Semaphore()
@@ -66,6 +67,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
         return self.__app_id
 
     def add(self, get_msg):
+        self.__timer_thread.resume_paused_timer()
         self._add(get_msg())
 
     def _add(self, msgs, no_flush=False):
@@ -155,11 +157,12 @@ class AsyncBatchConsumer(_AbstractConsumer):
         self._page_message(PAGER_CODE_CONSUMER_AB_QUEUE_FULL, "Queue is full")
 
     def flush(self):
-        self.__flushing_thread.flush()
+        self.__wm.execute(self._perform_request)
+        self.__timer_thread.refresh_timer()
 
     def close(self):
         self.flush()
-        self.__flushing_thread.stop()
+        self.__timer_thread.stop()
 
         pre_size = -1
         retried = 0
@@ -295,7 +298,14 @@ class AsyncBatchConsumer(_AbstractConsumer):
         ))
         Logger.log("="*80)
 
-    class _AsyncFlushThread(threading.Thread):      # Trigger thread
+    def _can_upload(self):
+        return len(self.__queue) > 0
+
+    def _queue_size(self):
+        return len(self.__queue)
+
+    class _TimerThread(threading.Thread):
+        """ Timer thread,  """
         def __init__(self, consumer, interval, wm):
             threading.Thread.__init__(self)
             self._consumer = consumer
@@ -304,32 +314,60 @@ class AsyncBatchConsumer(_AbstractConsumer):
 
             self._stop_event = threading.Event()
             self._finished_event = threading.Event()
-            self._flush_event = threading.Event()
+            self._awake_event = threading.Event()
+            self._refresh_event = threading.Event()
+            self._op_sem = threading.Semaphore()
+            self._resume_empty_event = threading.Event()
 
+        def refresh_timer(self):
+            """
+            refresh the timer by rewaiting.
+            """
+            with self._op_sem:
+                self._resume_empty_event.set()
+                self._refresh_event.set()
+                self._awake_event.set()
 
-        def flush(self):
-            self._flush_event.set()
+        def resume_paused_timer(self):
+            with self._op_sem:
+                self._resume_empty_event.set()
 
         def stop(self):
             """
             停止线程
             退出时需调用此方法，以保证线程安全结束.
             """
-            self._stop_event.set()
-            self._finished_event.wait()
+            with self._op_sem:
+                self._resume_empty_event.set()
+                self._stop_event.set()
+                self._awake_event.set()
+                self._finished_event.wait()
 
         def run(self):
             while True:
-                # if self._consumer._need_drain():
-                #     # 当当前queue size 大于batch size时，马上发送数据
-                #     self._flush_event.set()
-                # 如果 _flush_event 标志位为 True，或者等待超过 _interval 则继续执行
-                self._flush_event.wait(self._interval)
-                self._wm.execute(self._consumer._perform_request)
-                self._flush_event.clear()
+                # Wait for awaking or reaching timeout.
+                self._awake_event.wait(self._interval)
 
                 # 发现 stop 标志位时安全退出
                 if self._stop_event.isSet():
-                    self._wm.terminate()    # 关闭 worker manager
+                    Logger.debug("Stopping TimerT, will trigger the last upload")
+                    self._wm.execute(self._consumer._perform_request)   # do the last upload
                     break
+
+                # Refresh the timer, if flag set
+                if self._refresh_event.isSet():
+                    self._refresh_event.clear()
+                    self._awake_event.clear()
+                    continue
+
+                if not self._consumer._can_upload():
+                    Logger.debug("TimerT paused due to no need to upload")
+                    self._resume_empty_event.clear()
+                    self._resume_empty_event.wait()        # w/o timeout, prevent unneeded idle polling.
+                else:
+                    Logger.debug("TimerT triggering an upload")
+                    self._wm.execute(self._consumer._perform_request)
+                    self._awake_event.clear()
+
+            self._wm.terminate()    # 关闭 worker manager
             self._finished_event.set()

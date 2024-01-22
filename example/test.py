@@ -94,6 +94,20 @@ if __name__ == "__main__":
         properties=None,
         meta=meta
     )
+
+    import time
+    print("Sleeping 5 seconds...")
+    time.sleep(5)
+    dt.track(
+        dt_id="test0001",
+        acid="acid0001",
+        event_name="#app_install",
+        properties=None,
+        meta=meta
+    )
+    print("Tracked, waiting 3 seconds...")
+    time.sleep(3)
+
     dt.flush()
 
 
