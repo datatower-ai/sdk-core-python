@@ -53,11 +53,10 @@ class AsyncBatchConsumer(_AbstractConsumer):
         self.__acc_size = 0
 
         from datatower_ai.src.util.thread.thread import WorkerManager
-        self.__wm = WorkerManager("AsyncBatchConsumer-wm", size=num_network_threads)
+        self.__wm = WorkerManager("AsyncBatchConsumer-wm", size=num_network_threads, daemon=True)
 
         # 初始化发送线程
         self.__timer_thread = self._TimerThread(self, max(0, interval), self.__wm)
-        self.__timer_thread.daemon = True
         self.__timer_thread.start()
         self.__app_id = app_id
         self.__close_retry = close_retry
@@ -105,6 +104,8 @@ class AsyncBatchConsumer(_AbstractConsumer):
                     if not no_flush:
                         self.flush()
                 inserted += 1
+            _CounterMonitor["async_batch-insert"] += inserted
+            _CounterMonitor["async_batch-queue_len"] = len(self.__queue)
         time_add.stop(should_record=inserted > 0)
 
         count_avg("avg_num_groups_per_add", group_cnt, 1000, 100)
@@ -308,6 +309,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
         """ Timer thread,  """
         def __init__(self, consumer, interval, wm):
             threading.Thread.__init__(self)
+            self.daemon = True
             self._consumer = consumer
             self._interval = interval
             self._wm = wm               # Actual worker thread

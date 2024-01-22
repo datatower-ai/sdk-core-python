@@ -4,6 +4,7 @@ import random
 import sys
 import time
 from abc import abstractmethod
+
 if sys.version_info >= (3, 4):
     ABC = abc.ABC
 else:
@@ -96,7 +97,7 @@ class Worker(Thread):
                     halt = self.__handle_task(target_time, task)
                 except TypeError as e:
                     self.__tasks.put_nowait(
-                        (time.time()/1000 + max(0.0, self.__allowed_overtime), _Overtime(self.__allowed_overtime))
+                        (time.time() / 1000 + max(0.0, self.__allowed_overtime), _Overtime(self.__allowed_overtime))
                     )
                     self.__semaphore.release()
                     halt = False
@@ -113,7 +114,7 @@ class Worker(Thread):
             #     "%s tasks is empty, sent overtime signal (%.2fs).",self.__name, self.__allowed_overtime
             # )
             self.__semaphore.acquire()
-            self.__tasks.put_nowait((time.time()/1000 + self.__allowed_overtime, _Overtime(self.__allowed_overtime)))
+            self.__tasks.put_nowait((time.time() / 1000 + self.__allowed_overtime, _Overtime(self.__allowed_overtime)))
             self.__semaphore.release()
 
             # wait to handle overtime sig or be notified by other task.
@@ -196,18 +197,20 @@ class WorkerManager:
 
     def __init__(self,
                  name,
-                 size = 1,
-                 keep_alive_ms = -1,
-                 on_all_workers_stop = lambda: (),
-                 on_terminate = lambda: (),
-                 on_all_worker_revived = lambda: (),
-                 on_start = lambda: (),
+                 size=1,
+                 keep_alive_ms=-1,
+                 daemon=False,
+                 on_all_workers_stop=lambda: (),
+                 on_terminate=lambda: (),
+                 on_all_worker_revived=lambda: (),
+                 on_start=lambda: (),
                  ):
         """Creating a WorkerManager with fix number of workers
 
         :param name: Name of this worker manager, workers will be named by ${name}#0 ... ${name}#${size}
         :param size: Number of workers under this WorkerManager
         :param keep_alive_ms: Keep worker alive time in milliseconds after queue is empty (not more task to do)
+        :param daemon: Is the worker daemon.
         :param on_all_workers_stop: Callback when all workers terminated.
         """
         Logger.log("[WorkerManager] WorkerManager(name: %s, size: %d) is initializing" % (name, size), logging.DEBUG)
@@ -223,6 +226,7 @@ class WorkerManager:
         self.__keep_alive_ms = keep_alive_ms
         self.__barrier = Event()
         self.__barrier.set()
+        self.__daemon = daemon
         self.__on_terminate = on_terminate
         self.__on_all_workers_stop = on_all_workers_stop
         self.__on_all_worker_revived = on_all_worker_revived
@@ -232,12 +236,14 @@ class WorkerManager:
         return self.__size
 
     def __create_worker(self, idx):
-        return Worker(
+        worker = Worker(
             "%s#%d" % (self.__name, idx), idx, self.__queue, self.__condition, self.__semaphore, self.__barrier,
             barrier_timeout_ms=100,
             allowed_overtime_ms=self.__keep_alive_ms,
             on_terminate=self.__on_worker_terminate
         )
+        worker.daemon = self.__daemon
+        return worker
 
     def start(self):
         """Starting all workers"""
@@ -332,7 +338,7 @@ class WorkerManager:
         Logger.log("[%s] terminated!" % self, logging.DEBUG)
 
     def __terminate_workers(self):
-        for _ in range(len(self.__workers)+1):
+        for _ in range(len(self.__workers) + 1):
             self.__queue.put((float("inf"), _TERMINATE_SIG))  # puts to the very last
         self.__condition.acquire()
         self.__condition.notify_all()

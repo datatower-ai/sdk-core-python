@@ -18,7 +18,6 @@ _RANDOM_CHAR_SET = "qwertyuiopasdfghjklzxcvbnm1234567890-=_+[]{};:,.<>/?!@#$%^&*
 def random_string(length, char_set=_RANDOM_CHAR_SET):
     return ''.join(random.choice(char_set) for i in range(length))
 
-
 def track(worker_manager, size, dt, event_name, props, meta, use_batch_api):
     try:
         if use_batch_api:
@@ -30,7 +29,6 @@ def track(worker_manager, size, dt, event_name, props, meta, use_batch_api):
             for _ in range(size):
                 dt.track(dt_id=meta.get("#dt_id", None), acid=meta.get("#acid", None), event_name=event_name,
                          properties=props, meta=meta)
-
     except Exception as e:
         print(type(e))
         # os._exit(1)         # force quit
@@ -74,11 +72,16 @@ def handle(dt, args):
 
     wm_size = args.num_send_threads
     worker_manager = WorkerManager("test_worker_manager", size=wm_size)
+    worker_manager.start()
     tm = TimeMonitor()
 
     beg_time = time.time()
     starts_to_incr = False
     last_incr_time = 0
+
+    if num_rand_str != 0 and rand_str_len != 0:
+        for i in range(num_rand_str):
+            props["rand_str_" + str(i)] = random_string(abs(rand_str_len))
 
     max_rounds = args.max_rounds
     rounds = 1
@@ -114,11 +117,7 @@ def handle(dt, args):
                 tm.get_avg("async_batch-add"), tm.get_avg("async_batch-add_total")
               ),
         )
-        jump_lines = print_pinned(args, rounds, beg_time, tm)
-
-        if num_rand_str != 0 and rand_str_len != 0:
-            for i in range(num_rand_str):
-                props["rand_str_" + str(i)] = random_string(abs(rand_str_len))
+        jump_lines = print_pinned(args, rounds, beg_time, tm, args.num_network_threads)
 
         if size < wm_size:
             worker_manager.execute(lambda: track(worker_manager, size, dt, event_name, props, meta, use_batch_api))
@@ -134,9 +133,10 @@ def handle(dt, args):
         time.sleep(max(0, gap / 1000.0 - delta))
     print("\n" * jump_lines)
     worker_manager.terminate()
+    #dt.close()
 
 
-def print_pinned(args, rounds, beg_time, tm):
+def print_pinned(args, rounds, beg_time, tm, num_network_threads):
     (col, row) = getTerminalSize()
     try:
         import psutil
@@ -171,13 +171,12 @@ def print_pinned(args, rounds, beg_time, tm):
         unit_org_upload_size = "{:.2f}B".format(avg_org_upload_size)
 
     avg_upload_total_time = tm.get_avg("async_batch-upload_total")
-    qps_theoretical = _CounterMonitor["async_batch-avg_upload_success"] * 1000 / avg_upload_total_time
-    qps_buffered = qps_theoretical * 1 / 1.2
+    qps_theoretical = _CounterMonitor["async_batch-avg_upload_success"] * 1000 / avg_upload_total_time * num_network_threads
 
     pinned = (
         "> Round: {}, Time used: {}, tracked: {}, uploaded: {}, dropped: {}, queue len: {} ({:.2f}%), avg queue len: {:.1f} ({:.2f}%), avg add time used: {:.2f}ms, avg upload time used: {:.2f}ms\n"
         "> Avg original size: {}, avg compressed size: {}\n"
-        "> CPU: {}, MEM: {}, approx QPS: {} | {} | {}"
+        "> CPU: {}, MEM: {}, approx QPS: {} | {}"
     ).format(
         rounds,
         ts,
@@ -195,7 +194,6 @@ def print_pinned(args, rounds, beg_time, tm):
         mem,
         "{:.2f}".format(_CounterMonitor["async_batch-upload_success"] / rtu) if rtu != 0 else "0.0",
         "{:.2f}".format(qps_theoretical) if avg_upload_total_time > 0 else "0.0",
-        "{:.2f}".format(qps_buffered) if avg_upload_total_time > 0 else "0.0",
     )
     import math
     backs = max(0, sum(max(1, int(math.ceil(len(x) / col))) for x in pinned.split("\n")) - 1)
