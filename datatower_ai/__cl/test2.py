@@ -1,5 +1,7 @@
 # coding=utf-8
 from __future__ import print_function
+
+import random
 import time
 
 from datatower_ai import Event
@@ -8,6 +10,13 @@ from datatower_ai.src.util.performance.time_monitor import TimeMonitor
 from datatower_ai.src.util.thread.thread import WorkerManager
 
 from datatower_ai.src.util.json_util import json_loads_byteified
+
+_PURE_CHAR_SET = "qwertyuiopasdfghjklzxcvbnm"
+_RANDOM_CHAR_SET = "qwertyuiopasdfghjklzxcvbnm1234567890-=_+[]{};:,.<>/?!@#$%^&*()`~|"
+
+
+def random_string(length, char_set=_RANDOM_CHAR_SET):
+    return ''.join(random.choice(char_set) for i in range(length))
 
 
 def track(worker_manager, size, dt, event_name, props, meta, use_batch_api):
@@ -54,6 +63,8 @@ def handle(dt, args):
     incr_size = args.incr_size
     max_size = args.max_size
     use_batch_api = args.batch_api
+    num_rand_str = args.num_random_str
+    rand_str_len = args.random_str_len
 
     dt.register_pager(pager_func)
 
@@ -96,7 +107,7 @@ def handle(dt, args):
                 _CounterMonitor["async_batch-insert"], _CounterMonitor["async_batch-drop"],
                 _CounterMonitor["http_avg_compress_rate"].value, _CounterMonitor["avg_num_groups_per_add"].value,
                 _CounterMonitor["async_batch-avg_flush_buffer_len"].value,
-                _CounterMonitor["async_batch-avg_flush_buffer_size"].value,
+                _CounterMonitor["http_avg_original_size"].value,
                 _CounterMonitor["http_avg_compressed_size"].value,
                 tm.get_avg("async_batch-upload_fetch_from_queue"), tm.get_avg("async_batch-upload_fetch_from_queue_in"), tm.get_avg("http_avg_compress_duration"),
                 tm.get_avg("http_post"), tm.get_avg("async_batch-upload_total"),
@@ -104,6 +115,10 @@ def handle(dt, args):
               ),
         )
         jump_lines = print_pinned(args, rounds, beg_time, tm)
+
+        if num_rand_str != 0 and rand_str_len != 0:
+            for i in range(num_rand_str):
+                props["rand_str_" + str(i)] = random_string(abs(rand_str_len))
 
         if size < wm_size:
             worker_manager.execute(lambda: track(worker_manager, size, dt, event_name, props, meta, use_batch_api))
@@ -119,6 +134,7 @@ def handle(dt, args):
         time.sleep(max(0, gap / 1000.0 - delta))
     print("\n" * jump_lines)
     worker_manager.terminate()
+
 
 def print_pinned(args, rounds, beg_time, tm):
     (col, row) = getTerminalSize()
@@ -146,11 +162,22 @@ def print_pinned(args, rounds, beg_time, tm):
     else:
         unit_upload_size = "{:.2f}B".format(avg_upload_size)
 
+    avg_org_upload_size = _CounterMonitor["http_avg_original_size"].value
+    if avg_org_upload_size > 1024 * 1024:
+        unit_org_upload_size = "{:.2f}MB".format(avg_org_upload_size / 1024 / 1024)
+    elif avg_org_upload_size > 1024:
+        unit_org_upload_size = "{:.2f}KB".format(avg_org_upload_size / 1024)
+    else:
+        unit_org_upload_size = "{:.2f}B".format(avg_org_upload_size)
+
     avg_upload_total_time = tm.get_avg("async_batch-upload_total")
+    qps_theoretical = _CounterMonitor["async_batch-avg_upload_success"] * 1000 / avg_upload_total_time
+    qps_buffered = qps_theoretical * 1 / 1.2
 
     pinned = (
         "> Round: {}, Time used: {}, tracked: {}, uploaded: {}, dropped: {}, queue len: {} ({:.2f}%), avg queue len: {:.1f} ({:.2f}%), avg add time used: {:.2f}ms, avg upload time used: {:.2f}ms\n"
-        "> CPU: {}, MEM: {}, approx QPS: {} | {} (avg upload size: {})"
+        "> Avg original size: {}, avg compressed size: {}\n"
+        "> CPU: {}, MEM: {}, approx QPS: {} | {} | {}"
     ).format(
         rounds,
         ts,
@@ -163,11 +190,12 @@ def print_pinned(args, rounds, beg_time, tm):
         _CounterMonitor["async_batch-avg_queue_len"].value / args.queue_size * 100,
         tm.get_avg("async_batch-add_total"),
         avg_upload_total_time,
+        unit_org_upload_size, unit_upload_size,
         cpu,
         mem,
         "{:.2f}".format(_CounterMonitor["async_batch-upload_success"] / rtu) if rtu != 0 else "0.0",
-        "{:.2f}".format(_CounterMonitor["async_batch-avg_upload_success"] * 1000 / avg_upload_total_time) if avg_upload_total_time > 0 else "0.0",
-        unit_upload_size
+        "{:.2f}".format(qps_theoretical) if avg_upload_total_time > 0 else "0.0",
+        "{:.2f}".format(qps_buffered) if avg_upload_total_time > 0 else "0.0",
     )
     import math
     backs = max(0, sum(max(1, int(math.ceil(len(x) / col))) for x in pinned.split("\n")) - 1)
@@ -210,5 +238,7 @@ def init_parser(parser):
     parser.add_argument("-batch_api", action="store_true", help=None)  # 是否使用 batch api
     parser.add_argument("--num_send_threads", type=int, default=5, help=None)  # 同时调用接口的线程数
     parser.add_argument("--max_rounds", type=int, default=None, help=None)  # 最大轮数
+    parser.add_argument("--num_random_str", type=int, default=0, help=None)     # 随机字符串的个数
+    parser.add_argument("--random_str_len", type=int, default=0, help=None)     # 随机字符串的长度
 
     parser.set_defaults(op=safe_handle)

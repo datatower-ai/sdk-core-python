@@ -61,7 +61,7 @@ parser.add_argument("-d", dest="f_debug", action="store_true", help="Debug mode.
 # └─────────────────────────────┘
 # async_batch_consumer, ABC
 parser.add_argument("--interval", default=3, type=int)
-parser.add_argument("--flush_size_kb", default=20, type=int)
+parser.add_argument("--flush_len", default=10000, type=int)
 parser.add_argument("--queue_size", default=100000, type=int)
 parser.add_argument("--close_retry", default=1, type=int)
 parser.add_argument("--num_network_threads", default=2, type=int)
@@ -165,7 +165,7 @@ elif consumer_name.lower() == "async_batch":
         token=args.token,
         server_url=args.server_url,
         interval=args.interval,
-        flush_size_kb=args.flush_size_kb,
+        flush_len=args.flush_len,
         queue_size=args.queue_size,
         close_retry=args.close_retry,
         num_network_threads=args.num_network_threads,

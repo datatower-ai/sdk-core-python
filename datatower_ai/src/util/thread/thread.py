@@ -181,7 +181,7 @@ class Worker(Thread):
                 "[%s] Type of task is not valid, get: %s\n%s" % (self.__name, type(task), repr(e)), logging.ERROR
             )
         except Exception as e:
-            Logger.log("[%s] Exception occur during running task()\n%s" % (self.__name, repr(e)), logging.ERROR)
+            Logger.exception("[%s] Exception occur during running task()" % self.__name)
 
 
 class WorkerManager:

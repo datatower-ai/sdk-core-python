@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import gzip
 import json
+import sys
 import time
 
-from requests.exceptions import InvalidSchema
 from urllib3.exceptions import MaxRetryError, ConnectionError
 
 from datatower_ai.src.bean.pager_code import PAGER_CODE_SUB_NETWORK_MAX_RETRIES, PAGER_CODE_SUB_NETWORK_CONNECTION, \
@@ -27,22 +27,22 @@ from urllib3 import Retry
 
 
 class _RequestOversizeException(DTException):
-    def __init__(self, factor, compress_rate, compressed_size):
-        self.__factor = factor
-        self.__compression_rate = compress_rate
+    def __init__(self, origin_size, compressed_size, size_limit):
+        self.__origin_size = origin_size
         self.__compressed_size = compressed_size
+        self.__size_limit = size_limit
 
     @property
-    def factor(self):
-        return self.__factor
-
-    @property
-    def compression_rate(self):
-        return self.__compression_rate
+    def origin_size(self):
+        return self.__origin_size
 
     @property
     def compressed_size(self):
         return self.__compressed_size
+
+    @property
+    def size_limit(self):
+        return self.__size_limit
 
 
 def _gzip_string(data):
@@ -61,10 +61,6 @@ class _HttpService(object):
     """
     Internal class that handles HTTP requests
     """
-
-    __MB = 1024 * 1024
-    __MAX_SIZE = 8 * __MB
-
     DEFAULT_SERVER_URL = "https://s2s.roiquery.com/sync"
 
     _simulate = None
@@ -109,7 +105,6 @@ class _HttpService(object):
         if headers is None:
             headers = {}
 
-        compress_rate = 1
         if is_str(data) or type(data) is bytes:
             compress_type = 'gzip'
             if self.compress:
@@ -117,9 +112,12 @@ class _HttpService(object):
                 encoded = data if type(data) is bytes else data.encode("utf-8")
                 data = _gzip_string(encoded)
 
-                compress_rate = len(encoded) / len(data)
+                len_encoded = len(encoded)
+                len_data = len(data)
+                compress_rate = len_encoded / len_data
                 count_avg("http_avg_compress_rate", compress_rate, 1000, 50)
-                count_avg("http_avg_compressed_size", len(data), 1000, 50)
+                count_avg("http_avg_compressed_size", len_data, 1000, 50)
+                count_avg("http_avg_original_size", len_encoded, 1000, 50)
                 Logger.debug(
                     "[HttpService] avg compress rate: {:.4f}".format(_CounterMonitor["http_avg_compress_rate"]))
                 timer.stop()
@@ -135,7 +133,7 @@ class _HttpService(object):
             success = _HttpService._simulate >= 0
             Logger.info(
                 "[HttpService] Simulating the HttpService result -> {}, {}".format(success, _HttpService._simulate))
-            time.sleep(max(0, _HttpService._simulate / 1000))
+            time.sleep(max(0, abs(_HttpService._simulate) / 1000))
             timer.stop()
             return success
 
@@ -153,21 +151,15 @@ class _HttpService(object):
                 if code == 0:
                     return True
                 elif code == 11:
-                    print(response_data)
-                    # Request data is oversize, decrease the ACR to avoid recursive error.
-                    _HttpService.__MAX_SIZE = response_data["data"]["max_size"]
-                    data_size = len(data)
-                    old_avg = _CounterMonitor["http_avg_compress_rate"].value
-                    # penalty on avg compress rate, with additional 0.1
-                    delta = max(1, data_size / _HttpService.__MAX_SIZE) + 0.1
-                    _CounterMonitor["http_avg_compress_rate"] /= delta
+                    # Request data is oversize
+                    max_size = response_data["data"]["max_size"]
+                    recv_size = response_data["data"]["receive_size"]
                     Logger.warning(
-                        "[HttpService] Data is oversize ({:.0f}b > {:.0f}b), will try to split and resend. "
-                        "Put ACR penalty into effect ({:.2f}): {:.2f} -> {:.2f}".format(
-                            data_size, _HttpService.__MAX_SIZE, delta, old_avg, _CounterMonitor["http_avg_compress_rate"].value
+                        "[HttpService] Data is oversize ({:.0f}b > {:.0f}b), compressed size: {:.0f}b".format(
+                            recv_size, max_size, len(data)
                         )
                     )
-                    raise _RequestOversizeException(delta, compress_rate, len(data))
+                    raise _RequestOversizeException(recv_size, len(data), max_size)
                 else:
                     raise DTIllegalDataException("Unexpected result code: " + str(response_data["code"])
                                                  + " reason: " + response_data["msg"])
@@ -190,56 +182,3 @@ class _HttpService(object):
         session.mount("https://", HTTPAdapter(max_retries=retry))       # default 4 https
         session.mount("http://", HTTPAdapter(max_retries=retry))        # default 4 http
         return session
-
-
-if __name__ == "__main__":
-    import logging
-    logging.basicConfig(level=logging.DEBUG, format="%(message)s")
-    n = 100
-
-    def log(msg):
-        logging.disable(0)
-        logging.info(msg)
-        logging.disable(1000)
-
-    # raw
-    # log("Starts to run method 1...")
-    # beg = time.time()
-    # for i in range(n):
-    #     _ = requests.get("https://kotlinlang.org/")
-    #     _ = requests.get("https://www.python.org/")
-    # time_1 = time.time() - beg
-    # log("method 1 time taken: {:.2f}s, avg: {:.2f}s".format(time_1, time_1/n/2))
-
-    # session
-    log("Starts to run method 2...")
-    ts_beg = time.time()
-    ts_session = requests.Session()
-    for _ in range(n):
-        _ = ts_session.get("https://kotlinlang.org/")
-        _ = ts_session.get("https://www.python.org/")
-    time_2 = time.time() - ts_beg
-    log("method 2 time taken: {:.2f}s, avg: {:.2f}s".format(time_2, time_2/n/2))
-
-    # session, separate session
-    # log("Starts to run method 3...")
-    # beg = time.time()
-    # session = requests.Session()
-    # session2 = requests.Session()
-    # for _ in range(n):
-    #     _ = session.get("https://kotlinlang.org/")
-    #     _ = session2.get("https://www.python.org/")
-    # time_3 = time.time() - beg
-    # log("method 3 time taken: {:.2f}s, avg: {:.2f}s".format(time_3, time_3/n/2))
-
-    # session, separate adapter
-    log("Starts to run method 4...")
-    ts_beg = time.time()
-    ts_session = requests.Session()
-    ts_session.mount("https://kotlinlang.org", HTTPAdapter())
-    ts_session.mount("https://www.python.org", HTTPAdapter())
-    for _ in range(n):
-        _ = ts_session.get("https://kotlinlang.org/")
-        _ = ts_session.get("https://www.python.org/")
-    time_4 = time.time() - ts_beg
-    log("method 4 time taken: {:.2f}s, avg: {:.2f}s".format(time_4, time_4/n/2))
