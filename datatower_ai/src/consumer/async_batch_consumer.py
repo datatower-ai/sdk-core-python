@@ -106,6 +106,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
                 inserted += 1
             _CounterMonitor["async_batch-insert"] += inserted
             _CounterMonitor["async_batch-queue_len"] = len(self.__queue)
+            count_avg("async_batch-avg_queue_len", len(self.__queue), 10000, 1000)
         time_add.stop(should_record=inserted > 0)
 
         count_avg("avg_num_groups_per_add", group_cnt, 1000, 100)

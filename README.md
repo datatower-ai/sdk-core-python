@@ -1,31 +1,76 @@
-# DataTower.ai
+<p align="center">
+    <a href="https://datatower.ai/" target="_blank">
+        <picture>
+            <source srcset="https://dash.datatower.ai/logo_v2.png" media="(prefers-color-scheme: dark)">
+            <source srcset="https://dash.datatower.ai/logoWhite_v2.png" media="(prefers-color-scheme: light)" >
+            <img src="https://dash.datatower.ai/logoWhite_v2.png" alt="DataTower.ai">
+        </picture>
+    </a>
+</p>
 
-This is the official Python SDK for DataTower.ai.
+<p align="center">
+    <a title="Android" href="https://central.sonatype.com/artifact/ai.datatower/core" target="_blank"><img src="https://img.shields.io/maven-central/v/ai.datatower/core?logo=android&logoColor=70d68c&label=Android&labelColor=dbeffd" /></a>
+    <a title="iOS" href="https://cocoapods.org/pods/datatower_ai_core" target="_blank"><img src="https://img.shields.io/cocoapods/v/datatower_ai_core?logo=ios&logoColor=000000&label=iOS&labelColor=f3f3f5" /></a>
+    <a title="Unity" href="https://github.com/datatower-ai/core-unity/releases/latest" target="_blank"><img src="https://img.shields.io/github/v/release/datatower-ai/core-unity?logo=unity&logoColor=f7f7f7&label=Unity&labelColor=000000" /></a>
+    <a title="Flutter" href="https://pub.dev/packages/datatower_ai_core" target="_blank"><img src="https://img.shields.io/pub/v/datatower_ai_core?logo=flutter&logoColor=2375c5f2&label=Flutter" /></a>
+</p>
 
-## Easy Installation
+<p align="center">
+  <span>Available in</span>
+  <br />
+  <a href="https://github.com/datatower-ai/sdk-core-android">Android</a>
+  <span>-</span>
+  <a href="https://github.com/datatower-ai/sdk-core-ios">iOS</a>
+  <span>-</span>
+  <a href="https://github.com/datatower-ai/sdk-core-unity">Unity</a>
+  <span>-</span>
+  <a href="https://github.com/datatower-ai/sdk-core-flutter">Flutter</a>
+</p>
 
-You can get DataTower.ai SDK using pip.
+---
+
+# DataTower.ai - Core - Python | Server
+
+## Getting Started
+
+1. Register at [https://datatower.ai/][dt_url],
+2. Log in and Create your Project,
+3. Once created, you will get `appId`, `url` (*Reporting URL*) and `token` that will be used later.
+
+## Usage
+
+> **Please refer to our [API docs][api_doc_url]**
+
+**Functionalities:**
+- Event Tracking
+- Timing Event Tracking
+- User Property
+- Ad Flow Tracking
+- And batch api for a large amount of events.
+
+⚠ Remember to initialize the `DTAnalytics` with a _consumer_ before any usage of other APIs, a minimal example:
 
 ```python
-pip install datatower-ai
+from datatower_ai import *
+
+appId = "xxx"
+token = "xxx"
+reporting_url = "xxx"
+
+dt = DTAnalytics(
+    AsyncBatchConsumer(
+        app_id=appId,
+        token=token,
+        server_url=reporting_url
+    )
+)
 ```
 
-Once the SDK is successfully installed, use the SDK likes:
+## Other links
 
-```python
+- **[DataTower.ai][dt_url]**
+- **[DataTower.ai docs center][doc_url]**
 
-from datatower_ai.sdk import DTAnalytics, DebugConsumer
-
-dt = DTAnalytics(DebugConsumer(app_id="app_id_xxxx", token="xxxxxxxxxxxxxxxxxxxxxxx", server_url="https://xxxx"))
-
-properties = {"abc": 123, "bcd": "xxx"}
-
-dt.track(dt_id="aaaa", acid='bbbb', event_name="ad_click", properties=properties)
-
-dt.flush()
-
-dt.close()
-```
-
-## More details
-See [here](https://docs.datatower.ai/python-sdk-integration)
+[dt_url]: https://datatower.ai/
+[api_doc_url]: https://docs.datatower.ai/docs/Python_SDK
+[doc_url]: https://docs.datatower.ai/
