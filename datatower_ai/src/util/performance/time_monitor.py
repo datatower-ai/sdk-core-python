@@ -150,3 +150,16 @@ class TimeMonitor(Singleton):
             tp = self.__table[key]
             del self.__table[key]
             return tp
+
+
+class NoRecordTimeMonitor(TimeMonitor):
+    def _record(self, key, elapsed):
+        pass
+
+
+def debugOnlyTimeMonitor():
+    from datatower_ai.src.util._holder import _Holder
+    if _Holder().debug:
+        return TimeMonitor()
+    else:
+        return NoRecordTimeMonitor()

@@ -1,15 +1,13 @@
 # -*- coding: utf-8 -*-
 import gzip
 import json
-import sys
 import time
 
 from urllib3.exceptions import MaxRetryError, ConnectionError
 
 from datatower_ai.src.bean.pager_code import PAGER_CODE_SUB_NETWORK_MAX_RETRIES, PAGER_CODE_SUB_NETWORK_CONNECTION, \
     PAGER_CODE_SUB_NETWORK_OTHER
-from datatower_ai.src.util.data_struct.mini_lru import MiniLru
-from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor, count_avg
+from datatower_ai.src.util.performance.counter_monitor import count_avg, _CounterMonitor
 from datatower_ai.src.util.performance.time_monitor import TimeMonitor
 from datatower_ai.src.util.type_check import is_str
 
@@ -102,6 +100,7 @@ class _HttpService(object):
             return self.__post(url=url, data=data, headers=headers)
 
     def __post(self, url, data, headers=None):
+        from datatower_ai.src.util._holder import _Holder
         if headers is None:
             headers = {}
 
@@ -118,16 +117,14 @@ class _HttpService(object):
                 count_avg("http_avg_compress_rate", compress_rate, 1000, 50)
                 count_avg("http_avg_compressed_size", len_data, 1000, 50)
                 count_avg("http_avg_original_size", len_encoded, 1000, 50)
-                Logger.debug(
-                    "[HttpService] avg compress rate: {:.4f}".format(_CounterMonitor["http_avg_compress_rate"]))
+                if _Holder().debug: Logger.debug("[HttpService] avg compress rate: {:.4f}".format(_CounterMonitor["http_avg_compress_rate"]))
                 timer.stop()
             else:
                 compress_type = 'none'
                 data = data if type(data) is bytes else data.encode("utf-8")
             headers['compress'] = compress_type
 
-        from datatower_ai.src.util._holder import _Holder
-        if _Holder.debug and _HttpService._simulate is not None:
+        if _Holder().debug and _HttpService._simulate is not None:
             # Simulating the network request. Only works on Debug mode.
             timer = TimeMonitor().start("http_post")
             success = _HttpService._simulate >= 0

@@ -25,8 +25,8 @@ class _EventProcessor:
 
     def add_batch(self, send_type, *events):
         try:
-            from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor
-            _CounterMonitor["events"] += len(events)
+            from datatower_ai.src.util.performance.counter_monitor import debugOnlyCounterMonitor
+            debugOnlyCounterMonitor()["events"] += len(events)
 
             batch = [self.__build_data_from_event(send_type, event) for event in events]
             Logger.log('collect data=(len: {}){}'.format(len(batch), batch))

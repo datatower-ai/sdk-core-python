@@ -152,6 +152,22 @@ class _CounterMonitor(six.with_metaclass(_CounterMonitorMeta, object)):
     pass
 
 
+class EmptyCounterMonitor():
+    def __setitem__(cls, key, value):
+        pass
+
+    def __getitem__(cls, item):
+        return 0
+
+
+def debugOnlyCounterMonitor():
+    from datatower_ai.src.util._holder import _Holder
+    if _Holder().debug:
+        return _CounterMonitor
+    else:
+        return EmptyCounterMonitor()
+
+
 def count_avg(key, value, max_cnt, long_term_keep):
     # LSTM-like avg
     old_value = _CounterMonitor[key]
@@ -161,6 +177,12 @@ def count_avg(key, value, max_cnt, long_term_keep):
     new_cnt = (old_cnt + 1) % max_cnt
     _CounterMonitor[key + "_avgcnt"] = new_cnt if new_cnt != 0 else long_term_keep
     return new_avg
+
+
+def debug_only_count_avg(key, value, max_cnt, long_term_keep):
+    from datatower_ai.src.util._holder import _Holder
+    if _Holder().debug:
+        count_avg(key, value, max_cnt, long_term_keep)
 
 
 if __name__ == "__main__":

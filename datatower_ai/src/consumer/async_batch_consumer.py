@@ -3,7 +3,8 @@ import logging
 import time
 from collections import deque
 
-from datatower_ai.src.util.performance.time_monitor import TimeMonitor
+from datatower_ai.src.util.performance.time_monitor import debugOnlyTimeMonitor, TimeMonitor
+from datatower_ai.src.util.performance.counter_monitor import debugOnlyCounterMonitor
 
 try:
     import queue
@@ -17,7 +18,7 @@ from datatower_ai.src.util.exception import DTNetworkException, DTIllegalDataExc
 
 from datatower_ai.src.consumer.abstract_consumer import _AbstractConsumer
 from datatower_ai.src.service.http_service import _HttpService, _RequestOversizeException
-from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor, count_avg
+from datatower_ai.src.util.performance.counter_monitor import _CounterMonitor, debug_only_count_avg
 
 
 class AsyncBatchConsumer(_AbstractConsumer):
@@ -73,13 +74,13 @@ class AsyncBatchConsumer(_AbstractConsumer):
         if len(msgs) == 0:
             return
 
-        time_at = TimeMonitor().start("async_batch-add_total")
+        time_at = debugOnlyTimeMonitor().start("async_batch-add_total")
 
         encoded_msgs = [x if type(x) is bytes else x.encode("utf-8") for x in msgs]
         pre_len = len(self.__queue)
         acc_len = pre_len % self.__flush_len
 
-        time_add = TimeMonitor().start("async_batch-add")
+        time_add = debugOnlyTimeMonitor().start("async_batch-add")
         inserted = 0
         group_cnt = 0
         with self.__sem:
@@ -104,15 +105,15 @@ class AsyncBatchConsumer(_AbstractConsumer):
                     if not no_flush:
                         self.flush()
                 inserted += 1
-            _CounterMonitor["async_batch-insert"] += inserted
-            _CounterMonitor["async_batch-queue_len"] = len(self.__queue)
-            count_avg("async_batch-avg_queue_len", len(self.__queue), 10000, 1000)
+            debugOnlyCounterMonitor()["async_batch-insert"] += inserted
+            debugOnlyCounterMonitor()["async_batch-queue_len"] = len(self.__queue)
+            debug_only_count_avg("async_batch-avg_queue_len", len(self.__queue), 10000, 1000)
         time_add.stop(should_record=inserted > 0)
 
-        count_avg("avg_num_groups_per_add", group_cnt, 1000, 100)
+        debug_only_count_avg("avg_num_groups_per_add", group_cnt, 1000, 100)
 
         if inserted == len(msgs):
-            self.__check_is_queue_reached_threshold(pre_len, pre_len+inserted)
+            self.__check_is_queue_reached_threshold(pre_len, pre_len + inserted)
         else:
             # has dropped
             self.__on_queue_full(len(msgs), inserted)
@@ -122,7 +123,8 @@ class AsyncBatchConsumer(_AbstractConsumer):
     def __check_is_queue_reached_threshold(self, pre_len, crt_len):
         threshold = self.__max_queue_size * 0.7
         if pre_len < threshold <= crt_len:
-            from datatower_ai.src.util.performance.quality_helper import _DTQualityHelper, _DTQualityLevel, _CODE_ASYNC_BATCH_CONSUMER_QUEUE_REACH_THRESHOLD
+            from datatower_ai.src.util.performance.quality_helper import _DTQualityHelper, _DTQualityLevel, \
+                _CODE_ASYNC_BATCH_CONSUMER_QUEUE_REACH_THRESHOLD
             msg = ("Queue is reaching threshold (70%)! Caution: data will not be inserted when queue full. "
                    "Max len: {}, current len: {}, flush_size: {}, avg upload phase time taken: {:.2f}ms").format(
                 self.__max_queue_size, crt_len, self.__flush_len, TimeMonitor().get_avg("async_batch-upload_total")
@@ -148,7 +150,8 @@ class AsyncBatchConsumer(_AbstractConsumer):
             TimeMonitor().get_avg("async_batch-upload_total")
         )
         Logger.error("ERROR: " + msg)
-        from datatower_ai.src.util.performance.quality_helper import _DTQualityHelper, _DTQualityLevel, _CODE_ASYNC_BATCH_CONSUMER_QUEUE_FULL
+        from datatower_ai.src.util.performance.quality_helper import _DTQualityHelper, _DTQualityLevel, \
+            _CODE_ASYNC_BATCH_CONSUMER_QUEUE_FULL
         _DTQualityHelper().report_quality_message(
             app_id=self.get_app_id(),
             code=_CODE_ASYNC_BATCH_CONSUMER_QUEUE_FULL,
@@ -196,10 +199,10 @@ class AsyncBatchConsumer(_AbstractConsumer):
         timer_ut = TimeMonitor().start("async_batch-upload_total")
 
         # get a group of data
-        timer_uffq = TimeMonitor().start("async_batch-upload_fetch_from_queue")
+        timer_uffq = debugOnlyTimeMonitor().start("async_batch-upload_fetch_from_queue")
         flush_buffer = []
         with (self.__sem):
-            timer_uffqi = TimeMonitor().start("async_batch-upload_fetch_from_queue_in")
+            timer_uffqi = debugOnlyTimeMonitor().start("async_batch-upload_fetch_from_queue_in")
             acc_size = 0
             acc_len = 0
 
@@ -214,13 +217,13 @@ class AsyncBatchConsumer(_AbstractConsumer):
                 acc_len += 1
 
             queue_size = len(self.__queue)
-            _CounterMonitor["async_batch-queue_len"] = queue_size
-            count_avg("async_batch-avg_queue_len", queue_size, 10000, 1000)
+            debugOnlyCounterMonitor()["async_batch-queue_len"] = queue_size
+            debug_only_count_avg("async_batch-avg_queue_len", queue_size, 10000, 1000)
 
             length = len(flush_buffer)
             if length > 0:
-                count_avg("async_batch-avg_flush_buffer_len", length, 1000, 5)
-                count_avg("async_batch-avg_flush_buffer_size", acc_size, 1000, 5)
+                debug_only_count_avg("async_batch-avg_flush_buffer_len", length, 1000, 5)
+                debug_only_count_avg("async_batch-avg_flush_buffer_size", acc_size, 1000, 5)
 
             if queue_size == 0:
                 # if queue empty, reset the acc_size
@@ -228,7 +231,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
             timer_uffqi.stop(should_record=length > 0)
         timer_uffq.stop(should_record=length > 0)
 
-        timer_upload = TimeMonitor().start("async_batch-upload")
+        timer_upload = debugOnlyTimeMonitor().start("async_batch-upload")
         if length > 0:
             success = False
             put_back_to_queue = True
@@ -261,15 +264,15 @@ class AsyncBatchConsumer(_AbstractConsumer):
                         PAGER_CODE_COMMON_NETWORK_ERROR + PAGER_CODE_SUB_NETWORK_OVERSIZE,
                         "a single event is oversize, this event been dropped!"
                     )
-                    _CounterMonitor["async_batch-drop"] += 1
+                    debugOnlyCounterMonitor()["async_batch-drop"] += 1
             except Exception as e:
                 Logger.exception("Exception occurred")
                 from datatower_ai.src.bean.pager_code import PAGER_CODE_CONSUMER_AB_UPLOAD_ERROR
                 self._page_message(PAGER_CODE_CONSUMER_AB_UPLOAD_ERROR, repr(e))
 
             if success:
-                _CounterMonitor["async_batch-upload_success"] += length
-                count_avg("async_batch-avg_upload_success", length, 10000, 100)
+                debugOnlyCounterMonitor()["async_batch-upload_success"] += length
+                debug_only_count_avg("async_batch-avg_upload_success", length, 10000, 100)
             elif put_back_to_queue:
                 # If failed, putting the current group of data back to the caching queue.
                 self._add(flush_buffer, no_flush=True)
@@ -279,10 +282,10 @@ class AsyncBatchConsumer(_AbstractConsumer):
     @staticmethod
     def _print_statistics():
         from datatower_ai.src.util._holder import _Holder
-        if not _Holder().show_statistics:
+        if not _Holder().show_statistics or not _Holder().debug:
             return
         tm = TimeMonitor()
-        Logger.log("="*80)
+        Logger.log("=" * 80)
         Logger.log("[Statistics] add phase time used sum: {}, avg: {}".format(
             tm.get_sum("async_batch-add_total"), tm.get_avg("async_batch-add_total")
         ))
@@ -292,13 +295,14 @@ class AsyncBatchConsumer(_AbstractConsumer):
         Logger.log("[Statistics] 'events' count: {}".format(_CounterMonitor["events"]))
         Logger.log("[Statistics] 'uploaded' count: {}".format(_CounterMonitor["async_batch-upload_success"]))
         Logger.log("[Statistics] 'dropped' count: {}".format(_CounterMonitor["async_batch-drop"]))
-        Logger.log("[Statistics] avgerage number of groups per add: {:.2f}".format(_CounterMonitor["avg_num_groups_per_add"].value))
+        Logger.log("[Statistics] average number of groups per add: {:.2f}".format(
+            _CounterMonitor["avg_num_groups_per_add"].value))
         Logger.log("[Statistics] average upload length: {:.2f}, size: {:.2f}B ({:.2f}B)".format(
             _CounterMonitor["async_batch-avg_flush_buffer_len"].value,
             _CounterMonitor["async_batch-avg_flush_buffer_size"].value,
             _CounterMonitor["http_avg_compressed_size"].value
         ))
-        Logger.log("="*80)
+        Logger.log("=" * 80)
 
     def _can_upload(self):
         return len(self.__queue) > 0
@@ -308,12 +312,13 @@ class AsyncBatchConsumer(_AbstractConsumer):
 
     class _TimerThread(threading.Thread):
         """ Timer thread,  """
+
         def __init__(self, consumer, interval, wm):
             threading.Thread.__init__(self)
             self.daemon = True
             self._consumer = consumer
             self._interval = interval
-            self._wm = wm               # Actual worker thread
+            self._wm = wm  # Actual worker thread
 
             self._stop_event = threading.Event()
             self._finished_event = threading.Event()
@@ -354,7 +359,7 @@ class AsyncBatchConsumer(_AbstractConsumer):
                 # 发现 stop 标志位时安全退出
                 if self._stop_event.isSet():
                     Logger.debug("Stopping TimerT, will trigger the last upload")
-                    self._wm.execute(self._consumer._perform_request)   # do the last upload
+                    self._wm.execute(self._consumer._perform_request)  # do the last upload
                     break
 
                 # Refresh the timer, if flag set
@@ -366,11 +371,11 @@ class AsyncBatchConsumer(_AbstractConsumer):
                 if not self._consumer._can_upload():
                     Logger.debug("TimerT paused due to no need to upload")
                     self._resume_empty_event.clear()
-                    self._resume_empty_event.wait()        # w/o timeout, prevent unneeded idle polling.
+                    self._resume_empty_event.wait()  # w/o timeout, prevent unneeded idle polling.
                 else:
                     Logger.debug("TimerT triggering an upload")
                     self._wm.execute(self._consumer._perform_request)
                     self._awake_event.clear()
 
-            self._wm.terminate()    # 关闭 worker manager
+            self._wm.terminate()  # 关闭 worker manager
             self._finished_event.set()
